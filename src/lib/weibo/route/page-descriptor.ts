@@ -20,6 +20,8 @@ export type WeiboPageDescriptor =
   | { kind: 'explore'; groupId: string }
   | { kind: 'history' }
   | { kind: 'topic'; topic: string }
+  | { kind: 'super-topic'; superTopicId: string }
+  | { kind: 'super-topics' }
   | { kind: 'unsupported'; reason: 'invalid-url' | 'unmatched-path' }
 
 export const PAGE_KINDS_WITH_SCROLL_RESTORATION: ReadonlySet<WeiboPageDescriptor['kind']> = new Set(
@@ -33,5 +35,7 @@ export const PAGE_KINDS_WITH_SCROLL_RESTORATION: ReadonlySet<WeiboPageDescriptor
     'explore',
     'history',
     'topic',
+    'super-topic',
+    'super-topics',
   ],
 )

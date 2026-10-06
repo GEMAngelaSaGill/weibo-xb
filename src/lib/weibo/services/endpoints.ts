@@ -4,6 +4,8 @@ export const WEIBO_ENDPOINTS = {
   groupTimeline: '/ajax/feed/groupstimeline',
   exploreHot: '/ajax/feed/hottimeline',
   exploreGroups: '/ajax/feed/allGroups',
+  superTopicFlow: '/ajax_proxy/chaohua/page',
+  superTopicCheckin: '/p/aj/general/button',
   sideCards: '/ajax/side/cards',
   statusDetail: '/ajax/statuses/show',
   statusComments: '/ajax/statuses/buildComments',

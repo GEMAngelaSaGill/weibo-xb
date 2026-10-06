@@ -1,5 +1,8 @@
 import type { WeiboPageDescriptor } from '@/lib/weibo/route/page-descriptor'
 
+/** 微博超话 id 的固定前缀，用来和普通 /p/ 页面区分。 */
+export const SUPER_TOPIC_ID_PREFIX = '100808'
+
 export function parseWeiboUrl(input: string): WeiboPageDescriptor {
   let url: URL
 
@@ -98,9 +101,24 @@ export function parseWeiboUrl(input: string): WeiboPageDescriptor {
     return { kind: 'history' }
   }
 
+  // xb 自建的「我的超话」列表页；微博本身没有这个路径，实测不会跳转。
+  if (parts[0] === 'chaohua') {
+    return { kind: 'super-topics' }
+  }
+
   if (parts[0] === 'topic') {
     const q = url.searchParams.get('q')?.trim()
     return q ? { kind: 'topic', topic: q } : { kind: 'unsupported', reason: 'unmatched-path' }
+  }
+
+  // 超话主页：/p/{超话id} 或 /p/{超话id}/super_index。超话 id 固定以 100808 开头，
+  // 用前缀把超话和其它 /p/ 页面区分开，其余 /p/ 仍然交还给微博原版。
+  if (parts[0] === 'p' && parts[1]) {
+    const superTopicId = decodeURIComponent(parts[1])
+    if (superTopicId.startsWith(SUPER_TOPIC_ID_PREFIX)) {
+      return { kind: 'super-topic', superTopicId }
+    }
+    return { kind: 'unsupported', reason: 'unmatched-path' }
   }
 
   const authorId = parts[0]

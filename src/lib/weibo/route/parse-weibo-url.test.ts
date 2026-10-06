@@ -65,6 +65,33 @@ describe('parseWeiboUrl', () => {
     })
   })
 
+  it('parses a super topic home page', () => {
+    expect(
+      parseWeiboUrl('https://weibo.com/p/10080822ac697ad6c50539a5cccc69398dafd9/super_index'),
+    ).toEqual({
+      kind: 'super-topic',
+      superTopicId: '10080822ac697ad6c50539a5cccc69398dafd9',
+    })
+  })
+
+  it('parses a super topic URL without the super_index segment', () => {
+    expect(parseWeiboUrl('https://weibo.com/p/10080822ac697ad6c50539a5cccc69398dafd9')).toEqual({
+      kind: 'super-topic',
+      superTopicId: '10080822ac697ad6c50539a5cccc69398dafd9',
+    })
+  })
+
+  it('leaves non super topic /p/ pages to the native UI', () => {
+    expect(parseWeiboUrl('https://weibo.com/p/1005051234567890')).toEqual({
+      kind: 'unsupported',
+      reason: 'unmatched-path',
+    })
+  })
+
+  it('parses the super topics list page', () => {
+    expect(parseWeiboUrl('https://weibo.com/chaohua')).toEqual({ kind: 'super-topics' })
+  })
+
   it('returns unsupported for unknown paths', () => {
     expect(parseWeiboUrl('https://weibo.com/settings')).toEqual({
       kind: 'unsupported',

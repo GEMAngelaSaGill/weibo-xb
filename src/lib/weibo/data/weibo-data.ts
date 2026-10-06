@@ -29,6 +29,7 @@ import {
   loadStatusComments,
   loadStatusDetail,
   loadStatusLongText,
+  loadSuperTopicFlow,
   loadTopicSearch,
   type HomeTimelineTab,
   type UnreadCounts,
@@ -36,6 +37,7 @@ import {
 import type { ExploreGroup } from '@/lib/weibo/models/explore'
 import type { FeedAuthor, TimelinePage, TopicChannel } from '@/lib/weibo/models/feed'
 import type { StatusCommentsPage } from '@/lib/weibo/models/status'
+import type { SuperTopicFlowPage } from '@/lib/weibo/models/super-topic'
 import type { RelationPage } from '@/lib/weibo/models/user-relation'
 import type { WeiboPageDescriptor } from '@/lib/weibo/route/page-descriptor'
 import type { ProfileSearchParams } from '@/lib/weibo/route/profile-search-params'
@@ -79,6 +81,7 @@ export {
   loadFollowedSuperTopics,
   loadFriends,
   loadGroupTimeline,
+  loadAllFollowedSuperTopics,
   loadHomeTimeline,
   loadHotSearchByType,
   loadLikedStatuses,
@@ -94,12 +97,14 @@ export {
   loadStatusComments,
   loadStatusDetail,
   loadStatusLongText,
+  loadSuperTopicFlow,
   loadTopicSearch,
   publishWeiboStatus,
   setCommentLike,
   setProfileGroups,
   setSpecialFollowUser,
   setStatusLike,
+  signSuperTopic,
   submitComposeAction,
   unfollowUser,
 } from '@/lib/weibo/data/weibo-io'
@@ -393,6 +398,22 @@ export function exploreTimelineInfiniteOptions(group: ExploreGroup) {
     getNextPageParam: (lastPage: TimelinePage) => lastPage.nextCursor ?? undefined,
     maxPages: FEED_INFINITE_QUERY_MAX_PAGES,
     staleTime: Infinity,
+    gcTime: FEED_TIMELINE_GC_TIME_MS,
+  }
+}
+
+export function superTopicFlowInfiniteOptions(superTopicId: string, flowId: string | null) {
+  return {
+    queryKey: ['weibo', 'super-topic', superTopicId, flowId ?? 'default'] as const,
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      loadSuperTopicFlow({ superTopicId, flowId, page: pageParam }),
+    initialPageParam: 1 as number,
+    getNextPageParam: (lastPage: SuperTopicFlowPage) => {
+      const next = lastPage.nextCursor
+      return next ? Number.parseInt(next, 10) : undefined
+    },
+    maxPages: FEED_INFINITE_QUERY_MAX_PAGES,
+    staleTime: 60 * 1000,
     gcTime: FEED_TIMELINE_GC_TIME_MS,
   }
 }

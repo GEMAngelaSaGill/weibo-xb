@@ -19,7 +19,6 @@ import {
 } from './settings-dialog-ui'
 
 const LEFT_NAVIGATION_ITEMS = [
-  { key: 'showExplore', label: '探索' },
   { key: 'showFavorites', label: '收藏' },
   { key: 'showHistory', label: '历史' },
   { key: 'showNotifications', label: '通知' },
@@ -43,7 +42,6 @@ export function SettingsNavigationSection({
 }) {
   const settings = useAppSettings(
     useShallow((state) => ({
-      showExplore: state.showExplore,
       showFavorites: state.showFavorites,
       showHistory: state.showHistory,
       showNotifications: state.showNotifications,
@@ -87,7 +85,7 @@ export function SettingsNavigationSection({
           </Field>
         </SettingsSection>
 
-        <SettingsSection title="左侧导航" description="主页和设置入口始终保留。">
+        <SettingsSection title="左侧导航" description="时间线入口和设置入口始终保留。">
           {LEFT_NAVIGATION_ITEMS.map((item) => (
             <Field key={item.key} label={item.label}>
               <Switch

@@ -130,6 +130,8 @@ export function ShellFrame({
   const locationRef = useRef(location)
   locationRef.current = location
   const showRightRail = useAppSettings((state) => state.showRightRail)
+  // 超话页自带分区栏和完整信息流，右侧栏的搜索/热搜只是冗余。
+  const hideRightRail = pageKind === 'super-topic' || pageKind === 'super-topics'
   const immersiveMode = useAppSettings((state) => state.immersiveMode)
   const updateSettings = useAppSettings((state) => state.updateSettings)
   const shouldReduceMotion = useReducedMotion()
@@ -494,7 +496,7 @@ export function ShellFrame({
             {children}
           </motion.main>
           <AnimatePresence initial={false}>
-            {!immersiveMode && showRightRail && (
+            {!immersiveMode && showRightRail && !hideRightRail && (
               <motion.div
                 key="right-rail"
                 data-shell-rail="right"

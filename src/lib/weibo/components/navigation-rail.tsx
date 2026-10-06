@@ -4,9 +4,12 @@ import {
   ArrowUpRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
+  ClockIcon,
   Diamond,
   DiamondMinus,
+  Megaphone,
   Pencil,
+  StarIcon,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router'
@@ -16,7 +19,6 @@ import { BellIcon } from '@/components/ui/bell'
 import { BookmarkIcon } from '@/components/ui/bookmark'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { CogIcon } from '@/components/ui/cog'
-import { CompassIcon } from '@/components/ui/compass'
 import { HistoryIcon } from '@/components/ui/history'
 import { HomeIcon } from '@/components/ui/home'
 import { MessageSquareMoreIcon } from '@/components/ui/message-square-more'
@@ -29,12 +31,15 @@ import { useAppSettings, useShallow } from '@/lib/app-settings-store'
 import { cn } from '@/lib/utils'
 import { ThemeModeToggle } from '@/lib/weibo/components/theme-mode-toggle'
 import {
+  followGroupsQueryOptions,
   hasDmBadge,
   hasNotificationBadge,
   unreadNotificationsQueryOptions,
 } from '@/lib/weibo/data/weibo-data'
 import { getCurrentUserUid } from '@/lib/weibo/platform/current-user'
+import { homeTimelinePathFromTab } from '@/lib/weibo/route/home-timeline-path'
 import type { WeiboPageDescriptor } from '@/lib/weibo/route/page-descriptor'
+import { useWeiboPage } from '@/lib/weibo/route/use-weibo-page'
 
 function navButtonClassName(showLabel: boolean) {
   return cn(
@@ -57,7 +62,6 @@ function NavButton({
   variant,
   showBadge,
   disabled,
-  pressable = false,
 }: {
   children: React.ReactNode
   label: React.ReactNode
@@ -71,7 +75,6 @@ function NavButton({
   variant?: React.ComponentProps<typeof Button>['variant']
   showBadge?: boolean
   disabled?: boolean
-  pressable?: boolean
 }) {
   const buttonVariant = variant ?? (isActive ? 'secondary' : 'ghost')
   const accessibleLabel = showBadge ? `${ariaLabel}，有未读` : ariaLabel
@@ -88,11 +91,7 @@ function NavButton({
       icon
     )
   const size = showLabel ? 'default' : 'icon'
-  const sharedClassName = cn(
-    navButtonClassName(showLabel),
-    isActive && 'font-semibold',
-    pressable && 'active:scale-[0.96]',
-  )
+  const sharedClassName = cn(navButtonClassName(showLabel), isActive && 'font-semibold')
   const button = href ? (
     <a
       href={href}
@@ -128,7 +127,7 @@ function NavButton({
       onClick={onClick}
       size={size}
       disabled={disabled}
-      static={!pressable}
+      static
     >
       {iconWrap(children)}
       {showLabel && <span className="min-w-0 truncate">{label}</span>}
@@ -231,9 +230,6 @@ export function NavigationRail({
   onImmersiveModeChange,
 }: NavigationRailProps) {
   const {
-    homeTab,
-    homeGroupId,
-    showExplore,
     showFavorites,
     showHistory: showHistorySetting,
     showNotifications,
@@ -243,9 +239,6 @@ export function NavigationRail({
     sidebarCollapsed,
   } = useAppSettings(
     useShallow((state) => ({
-      homeTab: state.homeTab,
-      homeGroupId: state.homeGroupId,
-      showExplore: state.showExplore,
       showFavorites: state.showFavorites,
       showHistory: state.showHistory,
       showNotifications: state.showNotifications,
@@ -273,6 +266,15 @@ export function NavigationRail({
     Boolean(viewingProfileUserId) &&
     currentUserUid === viewingProfileUserId
   const isSavedItemsActive = pageKind === 'favorites' || pageKind === 'liked'
+
+  const page = useWeiboPage()
+  const activeHomeTab = page.kind === 'home' ? page.tab : null
+  // 自定义分组也走 /mygroups，只有落在默认分组时「最新微博」才算选中。
+  const isCustomGroupRoute =
+    page.kind === 'home' && page.tab === 'following' && Boolean(page.groupId)
+
+  const { data: followGroups } = useQuery({ ...followGroupsQueryOptions, enabled: rewriteEnabled })
+  const specialFollowHref = homeTimelinePathFromTab('special-follow', followGroups?.defaultGroups)
 
   const shouldPollUnread = !immersiveMode && (showNotifications || showDMs)
   const { data: unreadCounts } = useQuery({
@@ -307,32 +309,44 @@ export function NavigationRail({
         <nav aria-label="主导航" className="flex min-h-0 flex-1 flex-col">
           <div className="flex flex-col gap-1">
             <NavButton
-              label="主页"
-              ariaLabel="主页"
+              label="全部关注"
+              ariaLabel="全部关注"
               showLabel={!isCollapsed}
-              isActive={!isOwnProfileActive && pageKind === 'home'}
-              to={
-                homeGroupId
-                  ? `/mygroups?gid=${homeGroupId}`
-                  : homeTab === 'for-you'
-                    ? '/'
-                    : '/mygroups'
-              }
+              isActive={activeHomeTab === 'for-you'}
+              to="/"
             >
               <HomeIcon aria-hidden="true" className="size-4 shrink-0" />
             </NavButton>
 
-            {showExplore && (
-              <NavButton
-                label="探索"
-                ariaLabel="探索"
-                showLabel={!isCollapsed}
-                isActive={pageKind === 'explore'}
-                to="/hot/weibo/102803"
-              >
-                <CompassIcon aria-hidden="true" className="size-4 shrink-0" />
-              </NavButton>
-            )}
+            <NavButton
+              label="最新微博"
+              ariaLabel="最新微博"
+              showLabel={!isCollapsed}
+              isActive={activeHomeTab === 'following' && !isCustomGroupRoute}
+              to="/mygroups"
+            >
+              <ClockIcon aria-hidden="true" className="size-4 shrink-0" />
+            </NavButton>
+
+            <NavButton
+              label="特别关注"
+              ariaLabel="特别关注"
+              showLabel={!isCollapsed}
+              isActive={activeHomeTab === 'special-follow'}
+              to={specialFollowHref}
+            >
+              <StarIcon aria-hidden="true" className="size-4 shrink-0" />
+            </NavButton>
+
+            <NavButton
+              label="超话"
+              ariaLabel="超话"
+              showLabel={!isCollapsed}
+              isActive={pageKind === 'super-topics' || pageKind === 'super-topic'}
+              to="/chaohua"
+            >
+              <Megaphone aria-hidden="true" className="size-4 shrink-0" />
+            </NavButton>
 
             {showFavorites && (
               <NavButton
@@ -404,18 +418,14 @@ export function NavigationRail({
             )}
 
             {showCompose && (
-              <div className="mt-2">
-                <NavButton
-                  label="发微博"
-                  ariaLabel="发微博"
-                  showLabel={!isCollapsed}
-                  onClick={onComposeOpen}
-                  variant="default"
-                  pressable
-                >
-                  <Pencil aria-hidden="true" className="size-4 shrink-0" />
-                </NavButton>
-              </div>
+              <NavButton
+                label="发微博"
+                ariaLabel="发微博"
+                showLabel={!isCollapsed}
+                onClick={onComposeOpen}
+              >
+                <Pencil aria-hidden="true" className="size-4 shrink-0" />
+              </NavButton>
             )}
           </div>
 

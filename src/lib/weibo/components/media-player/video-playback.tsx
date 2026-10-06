@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { useAppSettings, useShallow } from '@/lib/app-settings-store'
-import { sanitizeFilename } from '@/lib/weibo/utils/filename'
+import { createMediaUrl, downloadMediaToFolder } from '@/lib/weibo/utils/download-media'
 
 import { useInlineFullscreen } from './inline-fullscreen'
 import { useVideoPlaybackSession } from './use-video-playback-session'
@@ -106,32 +106,10 @@ function useVideoDownload(options: VideoDownloadOption[]) {
       if (downloadingId) return
 
       setDownloadingId(download.id)
-      const name = download.filename
-        ? `${sanitizeFilename(download.filename)}.mp4`
-        : 'weibo_video.mp4'
-      toast.info(`准备下载：${name}`)
+      toast.info('正在保存视频到「微博图片」')
       try {
-        if (import.meta.env.FIREFOX) {
-          const anchor = document.createElement('a')
-          anchor.href = download.url
-          anchor.download = name
-          anchor.target = '_blank'
-          anchor.rel = 'noopener'
-          document.body.appendChild(anchor)
-          anchor.click()
-          anchor.remove()
-          toast.success(`视频已下载：${name}`)
-          return
-        }
-
-        const blobUrl = URL.createObjectURL(await fetchVideoBlob(download.url))
-        const anchor = document.createElement('a')
-        anchor.href = blobUrl
-        anchor.download = name
-        anchor.click()
-        anchor.remove()
-        URL.revokeObjectURL(blobUrl)
-        toast.success(`视频已下载：${name}`)
+        await downloadMediaToFolder([createMediaUrl(download.url, 'video')])
+        toast.success('视频已保存到「微博图片」')
       } catch {
         toast.error('视频下载失败，请稍后再试')
       } finally {

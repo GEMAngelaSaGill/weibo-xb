@@ -188,7 +188,6 @@ export interface AppSettings {
   lineHeightClass: LineHeightClass
   fontFamilyClass: FontFamilyClass
   fontApplyScope: FontApplyScope
-  showExplore: boolean
   showFavorites: boolean
   showHistory: boolean
   showNotifications: boolean
@@ -287,7 +286,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   lineHeightClass: 'leading-relaxed',
   fontFamilyClass: 'font-sans',
   fontApplyScope: 'content',
-  showExplore: true,
   showFavorites: true,
   showHistory: true,
   showNotifications: true,
@@ -681,10 +679,6 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     lineHeightClass: normalizeLineHeightClass(candidate.lineHeightClass),
     fontFamilyClass: normalizeFontFamilyClass(candidate.fontFamilyClass),
     fontApplyScope: normalizeFontApplyScope(candidate.fontApplyScope),
-    showExplore:
-      typeof candidate.showExplore === 'boolean'
-        ? candidate.showExplore
-        : DEFAULT_APP_SETTINGS.showExplore,
     showFavorites:
       typeof candidate.showFavorites === 'boolean'
         ? candidate.showFavorites

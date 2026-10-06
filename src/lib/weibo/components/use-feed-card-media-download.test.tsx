@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useFeedCardMediaDownload } from '@/lib/weibo/components/use-feed-card-media-download'
 import type { FeedItem } from '@/lib/weibo/models/feed'
 
-const { downloadAsZip, estimateTotalSize, extractMediaUrls, toastMock, toastState } = vi.hoisted(
-  () => {
+const { downloadMediaToFolder, estimateTotalSize, extractMediaUrls, toastMock, toastState } =
+  vi.hoisted(() => {
     const toastState = { nextId: 0 }
     const toastMock = Object.assign(
       vi.fn(() => `download-toast-${++toastState.nextId}`),
@@ -16,21 +16,20 @@ const { downloadAsZip, estimateTotalSize, extractMediaUrls, toastMock, toastStat
       },
     )
     return {
-      downloadAsZip: vi.fn(),
+      downloadMediaToFolder: vi.fn(),
       estimateTotalSize: vi.fn(),
       extractMediaUrls: vi.fn(),
       toastMock,
       toastState,
     }
-  },
-)
+  })
 
 vi.mock('sonner', () => ({
   toast: toastMock,
 }))
 
 vi.mock('@/lib/weibo/utils/download-media', () => ({
-  downloadAsZip,
+  downloadMediaToFolder,
   estimateTotalSize,
   extractMediaUrls,
 }))
@@ -60,10 +59,10 @@ describe('useFeedCardMediaDownload', () => {
     estimateTotalSize.mockResolvedValue(0)
   })
 
-  it('keeps one toast updated through download and zip generation', async () => {
-    downloadAsZip.mockImplementation(async (_urls, _filename, onProgress) => {
+  it('keeps one toast updated while saving each file', async () => {
+    downloadMediaToFolder.mockImplementation(async (_urls, onProgress) => {
       onProgress({ stage: 'downloading', completed: 1, total: 2 })
-      onProgress({ stage: 'generating-zip' })
+      onProgress({ stage: 'downloading', completed: 2, total: 2 })
       return { successCount: 2, failCount: 0 }
     })
     const { result } = renderHook(() => useFeedCardMediaDownload(item))
@@ -72,13 +71,13 @@ describe('useFeedCardMediaDownload', () => {
       await result.current.handleDownload()
     })
 
-    expect(extractMediaUrls).toHaveBeenCalledWith([], { author: 'Alice', text: 'post' })
+    expect(extractMediaUrls).toHaveBeenCalledWith([])
     const { toast } = await import('sonner')
     expect(toast).toHaveBeenCalledWith('正在准备媒体')
     const toastId = vi.mocked(toast).mock.results[0]?.value
     expect(toast).toHaveBeenCalledWith('正在下载媒体（1/2）', { id: toastId })
-    expect(toast).toHaveBeenCalledWith('正在生成 ZIP', { id: toastId })
-    expect(toast.success).toHaveBeenCalledWith('媒体已下载（2 个文件）', { id: toastId })
+    expect(toast).toHaveBeenCalledWith('正在下载媒体（2/2）', { id: toastId })
+    expect(toast.success).toHaveBeenCalledWith('已下载 2 个文件', { id: toastId })
   })
 
   it('uses independent toast ids for concurrent downloads', async () => {
@@ -87,14 +86,14 @@ describe('useFeedCardMediaDownload', () => {
     const progressCallbacks: Array<
       (progress: { stage: 'downloading'; completed: number; total: number }) => void
     > = []
-    downloadAsZip
-      .mockImplementationOnce((_urls, _filename, onProgress) => {
+    downloadMediaToFolder
+      .mockImplementationOnce((_urls, onProgress) => {
         progressCallbacks.push(onProgress)
         return new Promise((resolve) => {
           resolveFirst = resolve
         })
       })
-      .mockImplementationOnce((_urls, _filename, onProgress) => {
+      .mockImplementationOnce((_urls, onProgress) => {
         progressCallbacks.push(onProgress)
         return new Promise((resolve) => {
           resolveSecond = resolve
@@ -122,12 +121,16 @@ describe('useFeedCardMediaDownload', () => {
       resolveSecond({ successCount: 2, failCount: 0 })
       await Promise.all([firstDownload, secondDownload])
     })
-    expect(toast.success).toHaveBeenCalledWith('媒体已下载（2 个文件）', { id: firstToastId })
-    expect(toast.success).toHaveBeenCalledWith('媒体已下载（2 个文件）', { id: secondToastId })
+    expect(toast.success).toHaveBeenCalledWith('已下载 2 个文件', {
+      id: firstToastId,
+    })
+    expect(toast.success).toHaveBeenCalledWith('已下载 2 个文件', {
+      id: secondToastId,
+    })
   })
 
-  it('replaces the task toast with an error when downloadAsZip throws', async () => {
-    downloadAsZip.mockRejectedValueOnce(new Error('network failure'))
+  it('replaces the task toast with the underlying error when downloadMediaToFolder throws', async () => {
+    downloadMediaToFolder.mockRejectedValueOnce(new Error('network failure'))
     const { result } = renderHook(() => useFeedCardMediaDownload(item))
 
     await act(async () => {
@@ -136,29 +139,33 @@ describe('useFeedCardMediaDownload', () => {
 
     const { toast } = await import('sonner')
     const toastId = vi.mocked(toast).mock.results[0]?.value
-    expect(toast.error).toHaveBeenCalledWith('媒体下载失败，请稍后再试', { id: toastId })
+    expect(toast.error).toHaveBeenCalledWith('媒体下载失败：network failure', { id: toastId })
   })
 
-  it('keeps the 100MB confirmation path before starting the download', async () => {
-    estimateTotalSize.mockResolvedValueOnce(101 * 1024 * 1024)
-    downloadAsZip.mockResolvedValueOnce({ successCount: 2, failCount: 0 })
+  it('keeps the 500MB confirmation path before starting the download', async () => {
+    estimateTotalSize.mockResolvedValueOnce(501 * 1024 * 1024)
+    downloadMediaToFolder.mockResolvedValueOnce({ successCount: 2, failCount: 0 })
     const { result } = renderHook(() => useFeedCardMediaDownload(item))
 
     await act(async () => {
       await result.current.handleDownload()
     })
     expect(result.current.downloadDialog.props.open).toBe(true)
-    expect(downloadAsZip).not.toHaveBeenCalled()
+    expect(downloadMediaToFolder).not.toHaveBeenCalled()
 
     const dialog = render(result.current.downloadDialog)
     fireEvent.click(screen.getByRole('button', { name: '继续下载媒体' }))
-    await waitFor(() => expect(downloadAsZip).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(downloadMediaToFolder).toHaveBeenCalledTimes(1))
     dialog.unmount()
   })
 
   it('offers retry for failed resources only', async () => {
     const failed = [urls[1]]
-    downloadAsZip.mockResolvedValueOnce({ successCount: 1, failCount: 1, failedUrls: failed })
+    downloadMediaToFolder.mockResolvedValueOnce({
+      successCount: 1,
+      failCount: 1,
+      failedUrls: failed,
+    })
     const { result } = renderHook(() => useFeedCardMediaDownload(item))
 
     await act(async () => {
@@ -173,17 +180,13 @@ describe('useFeedCardMediaDownload', () => {
       | undefined
     expect(action).toMatchObject({ label: '重试失败项' })
 
-    downloadAsZip.mockResolvedValueOnce({ successCount: 1, failCount: 0 })
+    downloadMediaToFolder.mockResolvedValueOnce({ successCount: 1, failCount: 0 })
     await act(async () => {
       action?.onClick({} as never)
     })
     expect(toast).toHaveBeenCalledWith('正在准备媒体', { id: initialToastId })
     await waitFor(() =>
-      expect(downloadAsZip).toHaveBeenLastCalledWith(
-        failed,
-        'Alice_post.zip',
-        expect.any(Function),
-      ),
+      expect(downloadMediaToFolder).toHaveBeenLastCalledWith(failed, expect.any(Function)),
     )
   })
 })

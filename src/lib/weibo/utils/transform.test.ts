@@ -433,12 +433,7 @@ describe('toFeedItem media images', () => {
       },
     } as any)
 
-    expect(
-      extractMediaUrls(buildMediaAssets(result), {
-        author: result.author.name,
-        text: result.text,
-      }).map(({ url }) => url),
-    ).toEqual([
+    expect(extractMediaUrls(buildMediaAssets(result)).map(({ url }) => url)).toEqual([
       'https://wx3.sinaimg.cn/large/live-pic.jpg',
       'https://livephoto.us.sinaimg.cn/live-pic.mp4',
     ])

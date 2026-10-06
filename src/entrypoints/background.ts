@@ -150,7 +150,6 @@ interface MediaFetchResponse {
 const allowedMediaHostSuffixes = ['sinaimg.cn', 'sinajs.cn', 'weibocdn.com']
 export const maxBackgroundMediaBytes = 150 * 1024 * 1024
 const mediaRequestHeaderRuleId = 10_401
-const backgroundRequestTabId = -1
 
 let mediaRequestHeaderRulesPromise: Promise<void> | null = null
 
@@ -174,8 +173,9 @@ export function createMediaRequestHeaderRule(): Browser.declarativeNetRequest.Ru
     },
     condition: {
       regexFilter: '^https://[^/]+\\.(sinaimg\\.cn|sinajs\\.cn|weibocdn\\.com)/',
-      resourceTypes: ['xmlhttprequest'],
-      tabIds: [backgroundRequestTabId],
+      // 取字节走的是 background 的 fetch（xmlhttprequest）；其余类型一并留着，
+      // 页面自身加载微博图/视频时不带 Referer 也能拿到。
+      resourceTypes: ['xmlhttprequest', 'media', 'image', 'other'],
     },
   }
 }

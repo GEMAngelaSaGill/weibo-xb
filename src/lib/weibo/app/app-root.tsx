@@ -48,6 +48,12 @@ const HistoryPage = lazy(() =>
 const TopicPage = lazy(() =>
   import('@/lib/weibo/pages/topic-page').then((m) => ({ default: m.TopicPage })),
 )
+const SuperTopicPage = lazy(() =>
+  import('@/lib/weibo/pages/super-topic-page').then((m) => ({ default: m.SuperTopicPage })),
+)
+const SuperTopicsPage = lazy(() =>
+  import('@/lib/weibo/pages/super-topics-page').then((m) => ({ default: m.SuperTopicsPage })),
+)
 
 const queryClient = new QueryClient({
   mutationCache: new MutationCache({
@@ -98,6 +104,9 @@ function AppRootBootstrap() {
             <Route path="u/page/like/:uid" element={<LikedStatusesPage />} />
             <Route path="n/:uname" element={<ProfilePage />} />
             <Route path="topic" element={<TopicPage />} />
+            <Route path="p/:superTopicId" element={<SuperTopicPage />} />
+            <Route path="p/:superTopicId/*" element={<SuperTopicPage />} />
+            <Route path="chaohua" element={<SuperTopicsPage />} />
             <Route path="u/page/follow/:uid" element={<FollowFansPage />} />
             <Route path="at/weibo" element={<NotificationsPage />} />
             <Route path="comment/inbox" element={<NotificationsPage />} />

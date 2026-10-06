@@ -1,55 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
+import { CalendarCheck, Loader2 } from 'lucide-react'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription } from '@/components/ui/card'
 import { RefreshCWIcon } from '@/components/ui/refresh-cw'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
+import { SuperTopicItemLink } from '@/lib/weibo/components/super-topic-item-link'
+import { useSuperTopicCheckin } from '@/lib/weibo/components/use-super-topic-checkin'
 import { followedSuperTopicsQueryOptions } from '@/lib/weibo/data/weibo-data'
-import type { SuperTopicItem } from '@/lib/weibo/models/super-topic'
-
-function SuperTopicItemLink({ item }: { item: SuperTopicItem }) {
-  const fallback = item.title.trim().slice(0, 1) || '#'
-  const className =
-    'group hover:bg-accent/80 focus-visible:bg-accent/80 focus-visible:ring-ring/50 flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none'
-  const content = (
-    <>
-      <Avatar size="sm" className="size-8">
-        <AvatarImage src={item.pic} alt={item.title} />
-        <AvatarFallback>{fallback}</AvatarFallback>
-      </Avatar>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-foreground truncate text-sm leading-tight font-medium">
-          {item.title}
-        </span>
-        <span className="text-muted-foreground truncate text-xs leading-tight">
-          {item.fansText || item.intro || '超话'}
-        </span>
-      </span>
-    </>
-  )
-
-  if (!item.link) {
-    return (
-      <div className={className} title={item.title}>
-        {content}
-      </div>
-    )
-  }
-
-  return (
-    <a
-      href={item.link}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={className}
-      title={item.title}
-    >
-      {content}
-    </a>
-  )
-}
 
 interface SuperTopicCardProps {
   className?: string
@@ -57,8 +16,13 @@ interface SuperTopicCardProps {
 
 export function SuperTopicCard({ className }: SuperTopicCardProps) {
   const superTopicsQuery = useQuery(followedSuperTopicsQueryOptions)
+
   const items = superTopicsQuery.data?.items ?? []
   const title = superTopicsQuery.data?.name ?? '我关注的超话'
+
+  const { signing, signAll } = useSuperTopicCheckin(() => {
+    void superTopicsQuery.refetch()
+  })
 
   return (
     <Card className={className}>
@@ -69,15 +33,32 @@ export function SuperTopicCard({ className }: SuperTopicCardProps) {
             <p className="text-muted-foreground mt-0.5 text-xs leading-tight">{items.length} 个</p>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          onClick={() => superTopicsQuery.refetch()}
-          disabled={superTopicsQuery.isFetching}
-          title="刷新超话"
-        >
-          <RefreshCWIcon className={cn(superTopicsQuery.isFetching && 'animate-spin')} />
-        </Button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => void signAll()}
+            disabled={signing || superTopicsQuery.isFetching}
+            title="一键签到全部超话"
+            aria-label="一键签到"
+          >
+            {signing ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <CalendarCheck className="size-3" />
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => superTopicsQuery.refetch()}
+            disabled={superTopicsQuery.isFetching}
+            title="刷新超话"
+            aria-label="刷新超话"
+          >
+            <RefreshCWIcon className={cn(superTopicsQuery.isFetching && 'animate-spin')} />
+          </Button>
+        </div>
       </div>
       {superTopicsQuery.isLoading ? (
         <div className="flex justify-center py-4">

@@ -7,17 +7,68 @@ import {
 import type { FeedItem } from '@/lib/weibo/models/feed'
 
 import {
-  downloadAsZip,
+  createMediaUrl,
+  downloadMediaToFolder,
   estimateTotalSize,
   extractMediaUrls as extractMediaUrlsFromAssets,
+  formatDownloadTimestamp,
   inferExtension,
 } from './download-media'
 
 function extractMediaUrls(item: FeedItem) {
-  return extractMediaUrlsFromAssets(buildMediaAssets(item), {
-    author: item.author.name,
-    text: item.text,
+  return extractMediaUrlsFromAssets(buildMediaAssets(item))
+}
+
+/** 取出 `YYYYMMDD_HHmmss` 前缀，避免断言写死秒数导致跨秒抖动。 */
+function timestampOf(filename: string): string {
+  return filename.slice(0, 15)
+}
+
+/** 记录 anchor 落盘时用的文件名，用来断言时间戳命名。 */
+const downloadedFilenames: string[] = []
+
+/**
+ * 落盘流程：media-fetch 取字节（background 带 Referer）→ anchor + blob URL 存盘。
+ * anchor 的 download 属性是唯一能同时躲开 CDN 403、又保住文件名的路。
+ */
+function mockMediaRuntime(handlers: { fetch?: unknown } = {}) {
+  let blobSeq = 0
+
+  const sendMessage = vi.fn((message: { type: string; url: string; filename?: string }) => {
+    if (message.type === 'media-fetch') {
+      return Promise.resolve(
+        handlers.fetch ?? {
+          ok: true,
+          data: btoa('image-bytes'),
+          contentType: 'image/jpeg',
+        },
+      )
+    }
+    return Promise.resolve(undefined)
   })
+
+  Object.defineProperty(globalThis, 'browser', {
+    writable: true,
+    configurable: true,
+    value: { runtime: { sendMessage } },
+  })
+  Object.defineProperty(URL, 'createObjectURL', {
+    writable: true,
+    configurable: true,
+    value: vi.fn(() => `blob:mock-${++blobSeq}`),
+  })
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    writable: true,
+    configurable: true,
+    value: vi.fn(),
+  })
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(
+    function (this: HTMLAnchorElement) {
+      downloadedFilenames.push(this.download)
+    },
+  )
+
+  return sendMessage
 }
 
 afterEach(() => {
@@ -122,30 +173,29 @@ describe('extractMediaUrls', () => {
       },
     ]
 
-    expect(
-      extractMediaUrlsFromAssets(assets, { author: 'Alice', text: 'post' }).map(
-        ({ url, type, filename }) => ({ url, type, filename }),
-      ),
-    ).toEqual([
+    const urls = extractMediaUrlsFromAssets(assets)
+    const timestamp = timestampOf(urls[0]!.filename)
+
+    expect(urls.map(({ url, type, filename }) => ({ url, type, filename }))).toEqual([
       {
         url: 'https://example.com/video.mp4',
         type: 'video',
-        filename: 'Alice_post_1.mp4',
+        filename: `${timestamp}_1.mp4`,
       },
       {
         url: 'https://example.com/live.jpg',
         type: 'image',
-        filename: 'Alice_post_2.jpg',
+        filename: `${timestamp}_2.jpg`,
       },
       {
         url: 'https://example.com/live.mov',
         type: 'video',
-        filename: 'Alice_post_3.mov',
+        filename: `${timestamp}_3.mov`,
       },
       {
         url: 'https://example.com/audio',
         type: 'audio',
-        filename: 'Alice_post_4.m4a',
+        filename: `${timestamp}_4.m4a`,
       },
     ])
   })
@@ -171,10 +221,10 @@ describe('extractMediaUrls', () => {
     expect(urls).toHaveLength(2)
     expect(urls[0]!.url).toBe('https://example.com/large1.jpg')
     expect(urls[0]!.type).toBe('image')
-    expect(urls[0]!.filename).toContain('测试用户')
-    expect(urls[0]!.filename).toContain('_1.jpg')
+    expect(urls[0]!.filename).toMatch(/^\d{8}_\d{6}_1\.jpg$/)
     expect(urls[1]!.url).toBe('https://example.com/large2.jpg')
-    expect(urls[1]!.filename).toContain('_2.jpg')
+    expect(urls[1]!.filename).toMatch(/^\d{8}_\d{6}_2\.jpg$/)
+    expect(timestampOf(urls[1]!.filename)).toBe(timestampOf(urls[0]!.filename))
   })
 
   it('应该保留图片下载候选 URL', () => {
@@ -359,13 +409,65 @@ describe('extractMediaUrls', () => {
     expect(urls).toHaveLength(0)
   })
 
-  it('应该正确生成文件名（包含作者和微博文本）', () => {
+  it('用下载时刻的时间戳命名，同一批多张追加序号', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 9, 7, 14, 30, 52))
+
+    try {
+      const item = createMockItem({
+        images: [
+          {
+            id: '1',
+            thumbnailUrl: 'https://example.com/thumb1.jpg',
+            largeUrl: 'https://example.com/large1.jpg',
+          },
+          {
+            id: '2',
+            thumbnailUrl: 'https://example.com/thumb2.jpg',
+            largeUrl: 'https://example.com/large2.jpg',
+          },
+        ],
+      })
+
+      expect(extractMediaUrls(item).map((url) => url.filename)).toEqual([
+        '20261007_143052_1.jpg',
+        '20261007_143052_2.jpg',
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('只有一个素材时不追加序号', () => {
     const item = createMockItem({
-      author: {
-        id: 'user1',
-        name: '张三',
-        avatarUrl: null,
+      images: [
+        {
+          id: '1',
+          thumbnailUrl: 'https://example.com/thumb1.jpg',
+          largeUrl: 'https://example.com/large1.jpg',
+        },
+      ],
+    })
+
+    expect(extractMediaUrls(item)[0]!.filename).toMatch(/^\d{8}_\d{6}\.jpg$/)
+  })
+
+  it('扩展名跟随素材实际类型', () => {
+    const item = createMockItem({
+      media: {
+        type: 'video',
+        streamUrl: 'https://example.com/stream.mp4',
+        title: '测试视频',
+        coverUrl: null,
       },
+    })
+
+    expect(extractMediaUrls(item)[0]!.filename).toMatch(/^\d{8}_\d{6}\.mp4$/)
+  })
+
+  it('文件名不含作者和正文，仅由时间戳构成', () => {
+    const item = createMockItem({
+      author: { id: 'user1', name: '张三', avatarUrl: null },
       text: '今天天气真好啊，出去玩了一整天',
       images: [
         {
@@ -376,67 +478,12 @@ describe('extractMediaUrls', () => {
       ],
     })
 
-    const urls = extractMediaUrls(item)
-
-    expect(urls[0]!.filename).toContain('张三')
-    expect(urls[0]!.filename).toContain('今天天气真好啊')
-    expect(urls[0]!.filename).toMatch(/张三_今天天气真好啊.*_1\.jpg/)
+    expect(extractMediaUrls(item)[0]!.filename).toMatch(/^\d{8}_\d{6}\.jpg$/)
   })
 
-  it('应该处理包含 HTML 标签的文本', () => {
-    const item = createMockItem({
-      text: '<a href="#">链接</a>这是内容',
-      images: [
-        {
-          id: '1',
-          thumbnailUrl: 'https://example.com/thumb1.jpg',
-          largeUrl: 'https://example.com/large1.jpg',
-        },
-      ],
-    })
-
-    const urls = extractMediaUrls(item)
-
-    expect(urls[0]!.filename).not.toContain('<')
-    expect(urls[0]!.filename).not.toContain('>')
-    expect(urls[0]!.filename).toContain('链接这是内容')
-  })
-
-  it('应该处理包含特殊字符的文本', () => {
-    const item = createMockItem({
-      text: '测试/特殊:字符*文件名',
-      images: [
-        {
-          id: '1',
-          thumbnailUrl: 'https://example.com/thumb1.jpg',
-          largeUrl: 'https://example.com/large1.jpg',
-        },
-      ],
-    })
-
-    const urls = extractMediaUrls(item)
-
-    expect(urls[0]!.filename).not.toContain('/')
-    expect(urls[0]!.filename).not.toContain(':')
-    expect(urls[0]!.filename).not.toContain('*')
-  })
-
-  it('应该截断超过 10 个字符的文本', () => {
-    const item = createMockItem({
-      text: '这是一条非常非常非常长的微博文本内容',
-      images: [
-        {
-          id: '1',
-          thumbnailUrl: 'https://example.com/thumb1.jpg',
-          largeUrl: 'https://example.com/large1.jpg',
-        },
-      ],
-    })
-
-    const urls = extractMediaUrls(item)
-
-    const textPart = urls[0]!.filename.split('_')[1]!
-    expect(textPart.length).toBeLessThanOrEqual(10)
+  it('formatDownloadTimestamp 补零到 YYYYMMDD_HHmmss', () => {
+    expect(formatDownloadTimestamp(new Date(2026, 0, 2, 3, 4, 5))).toBe('20260102_030405')
+    expect(formatDownloadTimestamp(new Date(2026, 11, 31, 23, 59, 59))).toBe('20261231_235959')
   })
 })
 
@@ -531,279 +578,132 @@ describe('download media proxy', () => {
     expect(maxInFlight).toBeLessThanOrEqual(5)
   })
 
-  it('应该通过 background 代理下载媒体并生成 zip', async () => {
-    const sendMessage = vi.fn().mockResolvedValue({
-      ok: true,
-      contentType: 'image/jpeg',
-      data: Buffer.from('image-bytes').toString('base64'),
-    })
-    const createObjectURL = vi.fn().mockReturnValue('blob:zip')
-    const revokeObjectURL = vi.fn()
-    const setTimeoutSpy = vi
-      .spyOn(window, 'setTimeout')
-      .mockImplementation(() => 1 as unknown as ReturnType<typeof window.setTimeout>)
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  it('取字节成功后用时间戳文件名落盘', async () => {
+    const sendMessage = mockMediaRuntime()
+    downloadedFilenames.length = 0
 
-    Object.defineProperty(globalThis, 'browser', {
-      writable: true,
-      configurable: true,
-      value: {
-        runtime: {
-          sendMessage,
-        },
-      },
-    })
-    Object.defineProperty(URL, 'createObjectURL', {
-      writable: true,
-      configurable: true,
-      value: createObjectURL,
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', {
-      writable: true,
-      configurable: true,
-      value: revokeObjectURL,
-    })
-
-    const result = await downloadAsZip(
-      [{ url: 'https://wx1.sinaimg.cn/large/a.jpg', filename: 'a.jpg', type: 'image' }],
-      'media.zip',
-    )
+    const result = await downloadMediaToFolder([
+      { url: 'https://wx1.sinaimg.cn/large/a.jpg', filename: '20261007_143052.jpg', type: 'image' },
+    ])
 
     expect(result).toEqual({ successCount: 1, failCount: 0 })
     expect(sendMessage).toHaveBeenCalledWith({
       type: 'media-fetch',
       url: 'https://wx1.sinaimg.cn/large/a.jpg',
     })
-    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
-    expect(click).toHaveBeenCalled()
-    expect(revokeObjectURL).not.toHaveBeenCalled()
-    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000)
-
-    const revoke = setTimeoutSpy.mock.calls[0]?.[0]
-    if (typeof revoke === 'function') {
-      revoke()
-    }
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:zip')
-
-    click.mockRestore()
+    // anchor 的 download 属性拿到的是纯时间戳名（不再带目录前缀）
+    expect(downloadedFilenames).toEqual(['20261007_143052.jpg'])
   })
 
-  it('应该在主图下载失败时尝试候选 URL', async () => {
-    const sendMessage = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, error: 'media-fetch-failed:403' })
-      .mockResolvedValueOnce({
-        ok: true,
-        contentType: 'image/jpeg',
-        data: Buffer.from('fallback-image-bytes').toString('base64'),
-      })
-    const createObjectURL = vi.fn().mockReturnValue('blob:zip')
-    const revokeObjectURL = vi.fn()
-    const setTimeoutSpy = vi
-      .spyOn(window, 'setTimeout')
-      .mockImplementation(() => 1 as unknown as ReturnType<typeof window.setTimeout>)
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-
-    Object.defineProperty(globalThis, 'browser', {
-      writable: true,
-      configurable: true,
-      value: {
-        runtime: {
-          sendMessage,
-        },
-      },
-    })
-    Object.defineProperty(URL, 'createObjectURL', {
-      writable: true,
-      configurable: true,
-      value: createObjectURL,
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', {
-      writable: true,
-      configurable: true,
-      value: revokeObjectURL,
+  it('主图取字节失败时换下一个候选', async () => {
+    let call = 0
+    const sendMessage = mockMediaRuntime()
+    sendMessage.mockImplementation((message: { type: string; url: string; filename?: string }) => {
+      if (message.type === 'media-fetch') {
+        call++
+        return Promise.resolve(
+          call === 1
+            ? { ok: false, error: 'media-fetch-failed:403' }
+            : { ok: true, data: btoa('x'), contentType: 'image/jpeg' },
+        )
+      }
+      return Promise.resolve(undefined)
     })
 
     await expect(
-      downloadAsZip(
-        [
-          {
-            url: 'https://wx1.sinaimg.cn/large/a.jpg',
-            fallbackUrls: [
-              'https://wx1.sinaimg.cn/large/a.jpg',
-              'https://wx1.sinaimg.cn/orj1080/a.jpg',
-            ],
-            filename: 'a.jpg',
-            type: 'image',
-          },
-        ],
-        'media.zip',
-      ),
-    ).resolves.toEqual({ successCount: 1, failCount: 0 })
-
-    expect(sendMessage).toHaveBeenCalledTimes(2)
-    expect(sendMessage).toHaveBeenNthCalledWith(1, {
-      type: 'media-fetch',
-      url: 'https://wx1.sinaimg.cn/large/a.jpg',
-    })
-    expect(sendMessage).toHaveBeenNthCalledWith(2, {
-      type: 'media-fetch',
-      url: 'https://wx1.sinaimg.cn/orj1080/a.jpg',
-    })
-    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000)
-
-    const revoke = setTimeoutSpy.mock.calls[0]?.[0]
-    if (typeof revoke === 'function') {
-      revoke()
-    }
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:zip')
-
-    click.mockRestore()
-  })
-
-  it('应该在主图过大时继续尝试候选 URL', async () => {
-    const sendMessage = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: false, error: 'media-fetch-too-large' })
-      .mockResolvedValueOnce({
-        ok: true,
-        contentType: 'image/jpeg',
-        data: Buffer.from('fallback-image-bytes').toString('base64'),
-      })
-    const createObjectURL = vi.fn().mockReturnValue('blob:zip')
-    const revokeObjectURL = vi.fn()
-    const setTimeoutSpy = vi
-      .spyOn(window, 'setTimeout')
-      .mockImplementation(() => 1 as unknown as ReturnType<typeof window.setTimeout>)
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-
-    Object.defineProperty(globalThis, 'browser', {
-      writable: true,
-      configurable: true,
-      value: {
-        runtime: {
-          sendMessage,
+      downloadMediaToFolder([
+        {
+          url: 'https://wx1.sinaimg.cn/large/a.jpg',
+          fallbackUrls: [
+            'https://wx1.sinaimg.cn/large/a.jpg',
+            'https://wx1.sinaimg.cn/orj1080/a.jpg',
+          ],
+          filename: 'a.jpg',
+          type: 'image',
         },
-      },
-    })
-    Object.defineProperty(URL, 'createObjectURL', {
-      writable: true,
-      configurable: true,
-      value: createObjectURL,
-    })
-    Object.defineProperty(URL, 'revokeObjectURL', {
-      writable: true,
-      configurable: true,
-      value: revokeObjectURL,
-    })
-
-    await expect(
-      downloadAsZip(
-        [
-          {
-            url: 'https://wx1.sinaimg.cn/large/a.jpg',
-            fallbackUrls: ['https://wx1.sinaimg.cn/orj1080/a.jpg'],
-            filename: 'a.jpg',
-            type: 'image',
-          },
-        ],
-        'media.zip',
-      ),
+      ]),
     ).resolves.toEqual({ successCount: 1, failCount: 0 })
 
-    expect(sendMessage).toHaveBeenCalledTimes(2)
-    expect(sendMessage).toHaveBeenNthCalledWith(1, {
-      type: 'media-fetch',
-      url: 'https://wx1.sinaimg.cn/large/a.jpg',
-    })
-    expect(sendMessage).toHaveBeenNthCalledWith(2, {
-      type: 'media-fetch',
-      url: 'https://wx1.sinaimg.cn/orj1080/a.jpg',
-    })
-    expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 60_000)
+    const fetchedUrls = sendMessage.mock.calls
+      .filter(([message]) => (message as { type: string }).type === 'media-fetch')
+      .map(([message]) => (message as { url: string }).url)
 
-    const revoke = setTimeoutSpy.mock.calls[0]?.[0]
-    if (typeof revoke === 'function') {
-      revoke()
-    }
-    expect(revokeObjectURL).toHaveBeenCalledWith('blob:zip')
-
-    click.mockRestore()
+    expect(fetchedUrls).toEqual([
+      'https://wx1.sinaimg.cn/large/a.jpg',
+      'https://wx1.sinaimg.cn/orj1080/a.jpg',
+    ])
   })
 
-  it('应该报告下载项进度和 ZIP 生成阶段，并返回失败媒体', async () => {
-    const sendMessage = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, contentType: 'image/jpeg', data: 'aW1hZ2U=' })
-      .mockResolvedValueOnce({ ok: false, error: 'media-fetch-failed:403' })
-    const createObjectURL = vi.fn().mockReturnValue('blob:zip')
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    vi.spyOn(window, 'setTimeout').mockImplementation(
-      () => 1 as unknown as ReturnType<typeof window.setTimeout>,
-    )
+  it('所有候选都失败时抛错并带上具体原因', async () => {
+    mockMediaRuntime({ fetch: { ok: false, error: 'media-fetch-failed:403' } })
 
-    Object.defineProperty(globalThis, 'browser', {
-      writable: true,
-      configurable: true,
-      value: { runtime: { sendMessage } },
-    })
-    Object.defineProperty(URL, 'createObjectURL', {
-      writable: true,
-      configurable: true,
-      value: createObjectURL,
+    const first = { url: 'https://example.com/a.jpg', filename: 'a.jpg', type: 'image' as const }
+    const second = { url: 'https://example.com/b.jpg', filename: 'b.jpg', type: 'image' as const }
+
+    await expect(downloadMediaToFolder([first, second])).rejects.toThrow('media-fetch-failed:403')
+  })
+
+  it('部分失败时返回成功与失败计数', async () => {
+    let call = 0
+    const sendMessage = mockMediaRuntime()
+    sendMessage.mockImplementation((message: { type: string; url: string; filename?: string }) => {
+      if (message.type === 'media-fetch') {
+        call++
+        return Promise.resolve(
+          call === 1
+            ? { ok: true, data: btoa('ok'), contentType: 'image/jpeg' }
+            : { ok: false, error: 'media-fetch-failed:403' },
+        )
+      }
+      return Promise.resolve(undefined)
     })
 
     const first = { url: 'https://example.com/a.jpg', filename: 'a.jpg', type: 'image' as const }
-    const second = {
-      url: 'https://example.com/b.jpg',
-      filename: 'b.jpg',
-      type: 'image' as const,
-    }
-    const progress: Array<{ stage: string; completed?: number; total?: number }> = []
+    const second = { url: 'https://example.com/b.jpg', filename: 'b.jpg', type: 'image' as const }
+    const progress: Array<{ stage: string; completed: number; total: number }> = []
 
-    const result = await downloadAsZip([first, second], 'media.zip', (event) => {
+    const result = await downloadMediaToFolder([first, second], (event) => {
       progress.push(event)
     })
 
     expect(progress).toEqual([
       { stage: 'downloading', completed: 1, total: 2 },
       { stage: 'downloading', completed: 2, total: 2 },
-      { stage: 'generating-zip' },
     ])
     expect(result).toEqual({ successCount: 1, failCount: 1, failedUrls: [second] })
-    click.mockRestore()
   })
 
   it('进度回调异常时不应中断下载', async () => {
-    const sendMessage = vi.fn().mockResolvedValue({
-      ok: true,
-      contentType: 'image/jpeg',
-      data: Buffer.from('image-bytes').toString('base64'),
-    })
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    vi.spyOn(window, 'setTimeout').mockImplementation(
-      () => 1 as unknown as ReturnType<typeof window.setTimeout>,
-    )
-    Object.defineProperty(globalThis, 'browser', {
-      writable: true,
-      configurable: true,
-      value: { runtime: { sendMessage } },
-    })
-    Object.defineProperty(URL, 'createObjectURL', {
-      writable: true,
-      configurable: true,
-      value: vi.fn().mockReturnValue('blob:zip'),
-    })
+    mockMediaRuntime()
 
     await expect(
-      downloadAsZip(
+      downloadMediaToFolder(
         [{ url: 'https://example.com/a.jpg', filename: 'a.jpg', type: 'image' }],
-        'media.zip',
         () => {
           throw new Error('callback failed')
         },
       ),
     ).resolves.toMatchObject({ successCount: 1, failCount: 0 })
-    click.mockRestore()
+  })
+
+  it('没有可下载的媒体时抛错', async () => {
+    await expect(downloadMediaToFolder([])).rejects.toThrow('没有可下载的媒体资源')
+  })
+})
+
+describe('createMediaUrl', () => {
+  it('生成时间戳文件名并保留 sinaimg 尺寸候选', () => {
+    const mediaUrl = createMediaUrl('http://wx1.sinaimg.cn/large/pic.jpg')
+
+    expect(mediaUrl.url).toBe('https://wx1.sinaimg.cn/large/pic.jpg')
+    expect(mediaUrl.filename).toMatch(/^\d{8}_\d{6}\.jpg$/)
+    expect(mediaUrl.fallbackUrls).toContain('https://wx1.sinaimg.cn/original/pic.jpg')
+  })
+
+  it('视频不做尺寸候选展开', () => {
+    const mediaUrl = createMediaUrl('https://f.video.weibocdn.com/video.mp4', 'video')
+
+    expect(mediaUrl.filename).toMatch(/^\d{8}_\d{6}\.mp4$/)
+    expect(mediaUrl.fallbackUrls).toBeUndefined()
   })
 })

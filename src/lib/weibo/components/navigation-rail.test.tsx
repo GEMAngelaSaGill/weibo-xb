@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_SETTINGS_STORAGE_KEY } from '@/lib/app-settings'
 import { getAppSettingsStore, resetAppSettingsStoreForTest } from '@/lib/app-settings-store'
 import { NavigationRail } from '@/lib/weibo/components/navigation-rail'
+import type { WeiboPageDescriptor } from '@/lib/weibo/route/page-descriptor'
 
 const getCurrentUserUidMock = vi.fn<() => string | null>()
 const checkUnreadNotificationsMock = vi.fn()
@@ -81,12 +82,14 @@ describe('NavigationRail', () => {
     viewingProfileUserId = null,
     rewriteEnabled = false,
     immersiveMode = false,
+    initialEntries = ['/'],
     onImmersiveModeChange = vi.fn(),
   }: {
-    pageKind?: 'home' | 'profile' | 'status' | 'unsupported'
+    pageKind?: WeiboPageDescriptor['kind']
     viewingProfileUserId?: string | null
     rewriteEnabled?: boolean
     immersiveMode?: boolean
+    initialEntries?: string[]
     onImmersiveModeChange?: (enabled: boolean) => void
   } = {}) {
     const queryClient = new QueryClient({
@@ -95,7 +98,7 @@ describe('NavigationRail', () => {
 
     return render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={initialEntries}>
           <NavigationRail
             pageKind={pageKind}
             viewingProfileUserId={viewingProfileUserId}
@@ -125,9 +128,36 @@ describe('NavigationRail', () => {
   it('uses real links for internal destinations', () => {
     renderNavigationRail()
 
-    expect(screen.getByRole('link', { name: '主页' })).toHaveAttribute('href', '/')
-    expect(screen.getByRole('link', { name: '探索' })).toHaveAttribute('href', '/hot/weibo/102803')
+    expect(screen.getByRole('link', { name: '全部关注' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: '最新微博' })).toHaveAttribute('href', '/mygroups')
+    // 分组列表未加载时退回到不带 gid 的 /mygroups。
+    expect(screen.getByRole('link', { name: '特别关注' })).toHaveAttribute('href', '/mygroups')
+    expect(screen.getByRole('link', { name: '超话' })).toHaveAttribute('href', '/chaohua')
     expect(screen.getByRole('link', { name: '收藏' })).toHaveAttribute('href', '/u/page/fav/1001')
+  })
+
+  it('超话入口在超话页和超话列表页都算选中', () => {
+    const { unmount } = renderNavigationRail({
+      pageKind: 'super-topic',
+    })
+    expect(screen.getByRole('link', { name: '超话' })).toHaveAttribute('aria-current', 'page')
+    unmount()
+
+    renderNavigationRail({ pageKind: 'super-topics' })
+    expect(screen.getByRole('link', { name: '超话' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('非超话页时超话入口不选中', () => {
+    renderNavigationRail()
+
+    expect(screen.getByRole('link', { name: '超话' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('no longer renders the explore entry', () => {
+    renderNavigationRail()
+
+    expect(screen.queryByRole('link', { name: '探索' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '主页' })).not.toBeInTheDocument()
   })
 
   it('renders private messages as a real external link without nesting a button', () => {
@@ -141,9 +171,23 @@ describe('NavigationRail', () => {
 
   it('marks active items through aria-current', () => {
     renderNavigationRail()
-    expect(screen.getByRole('link', { name: '主页' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: '主页' })).toHaveClass('font-semibold')
+    expect(screen.getByRole('link', { name: '全部关注' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: '全部关注' })).toHaveClass('font-semibold')
     expect(screen.getByRole('link', { name: '我的' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('moves the active marker to 最新微博 on the default following route', () => {
+    renderNavigationRail({ initialEntries: ['/mygroups'] })
+
+    expect(screen.getByRole('link', { name: '最新微博' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: '全部关注' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('leaves all three timeline entries inactive on a custom group route', () => {
+    renderNavigationRail({ initialEntries: ['/mygroups?gid=123456'] })
+
+    expect(screen.getByRole('link', { name: '最新微博' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: '全部关注' })).not.toHaveAttribute('aria-current')
   })
 
   it('marks profile as active when viewing current user profile', () => {

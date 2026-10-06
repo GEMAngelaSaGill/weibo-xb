@@ -1,9 +1,9 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import { useAppSettings } from '@/lib/app-settings-store'
-import { cn } from '@/lib/utils'
 import { useImmersiveHeaderClassName } from '@/lib/weibo/app/immersive-header'
+import { ChannelBar } from '@/lib/weibo/components/channel-bar'
 import { InfiniteFeedList } from '@/lib/weibo/components/infinite-feed-list'
 import { MweiboTopicRecoveryPrompt } from '@/lib/weibo/components/mweibo-topic-recovery-prompt'
 import {
@@ -12,61 +12,8 @@ import {
   getMweiboTopicRecoveryState,
   topicSearchInfiniteOptions,
 } from '@/lib/weibo/data/weibo-data'
-import type { TimelinePage, TopicChannel } from '@/lib/weibo/models/feed'
+import type { TimelinePage } from '@/lib/weibo/models/feed'
 import { useWeiboPage } from '@/lib/weibo/route/use-weibo-page'
-
-function TopicChannelBar({
-  channels,
-  selectedId,
-  onSelect,
-}: {
-  channels: TopicChannel[]
-  selectedId: string
-  onSelect: (id: string) => void
-}) {
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-
-  return (
-    <div
-      ref={scrollRef}
-      className="border-border/40 flex w-full scrollbar-none gap-1.5 overflow-x-auto border-b px-1 py-2"
-    >
-      {channels.map((ch) => (
-        <TopicChannelPill
-          key={ch.id}
-          label={ch.name}
-          isActive={selectedId === ch.id}
-          onClick={() => onSelect(ch.id)}
-        />
-      ))}
-    </div>
-  )
-}
-
-function TopicChannelPill({
-  label,
-  isActive,
-  onClick,
-}: {
-  label: string
-  isActive: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-medium transition-colors',
-        isActive
-          ? 'bg-foreground text-background'
-          : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
-      )}
-    >
-      {label}
-    </button>
-  )
-}
 
 export function TopicPage() {
   const page = useWeiboPage()
@@ -130,8 +77,8 @@ export function TopicPage() {
           ) : null}
         </div>
         {channels.length > 0 ? (
-          <TopicChannelBar
-            channels={channels}
+          <ChannelBar
+            items={channels.map((ch) => ({ id: ch.id, label: ch.name }))}
             selectedId={selectedChannelId}
             onSelect={handleChannelSelect}
           />

@@ -20,13 +20,14 @@ afterEach(() => {
 })
 
 describe('background media request header rule', () => {
-  it('only matches background fetch requests for media downloads', () => {
+  it('covers both background fetches and downloads API requests', () => {
     const rule = createMediaRequestHeaderRule()
 
-    expect(rule.condition.resourceTypes).toEqual(['xmlhttprequest'])
-    expect(rule.condition.tabIds).toEqual([-1])
-    expect(rule.condition.resourceTypes).not.toContain('media')
-    expect(rule.condition.resourceTypes).not.toContain('image')
+    expect(rule.condition.resourceTypes).toEqual(['xmlhttprequest', 'media', 'image', 'other'])
+    expect(rule.condition.resourceTypes).toContain('other')
+    // 下载请求不一定挂 tabId，规则不能再按 tab 收窄。
+    expect(rule.condition.tabIds).toBeUndefined()
+    expect(rule.condition.regexFilter).toContain('sinaimg')
   })
 })
 
