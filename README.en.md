@@ -2,7 +2,7 @@
   <img src="./public/icon/rounded_image.png" alt="xb" width="96" />
 </p>
 
-<h1 align="center">xb</h1>
+<h1 align="center">xb <sub><sup>personal fork</sup></sub></h1>
 
 <p align="center">
   <strong>Redesign Weibo</strong>
@@ -12,23 +12,31 @@
 
 <p align="right">
   <a href="./README.md">中文</a>
-  ·
-  <a href="https://xb-extension.vercel.app/">Website</a>
 </p>
 
-[![CI](https://github.com/nnecec/xb/actions/workflows/test.yml/badge.svg)](https://github.com/nnecec/xb/actions/workflows/test.yml)
-[![License](https://img.shields.io/github/license/nnecec/xb)](https://github.com/nnecec/xb/blob/main/LICENSE)
-[![Release](https://img.shields.io/github/v/release/nnecec/xb)](https://github.com/nnecec/xb/releases)
-[![Stars](https://img.shields.io/github/stars/nnecec/xb)](https://github.com/nnecec/xb/stargazers)
-[![Issues](https://img.shields.io/github/issues/nnecec/xb)](https://github.com/nnecec/xb/issues)
-[![Last commit](https://img.shields.io/github/last-commit/nnecec/xb)](https://github.com/nnecec/xb/commits/main)
+> [!IMPORTANT]
+> **This is a personal fork, not the official project, and it is not published to any store.**
+>
+> It is derived from [nnecec/xb](https://github.com/nnecec/xb) (GPL-3.0) and carries a handful of
+> changes made for personal use. The upstream website, store listings and CI status do not apply here.
+> For the original project — and to report upstream issues — go to
+> **[nnecec/xb](https://github.com/nnecec/xb)**.
+>
+> For what this fork changes, see the
+> [「本分支的改动」section in the Chinese README](./README.md#本分支的改动)
+> (currently Chinese-only). In short:
+>
+> - **Super-topic (超话) support** — upstream bails out on those URLs; this fork renders
+>   a super-topic page (header, channel tabs, feed) plus a `/chaohua` list page and a
+>   one-click sign-in for every followed super topic.
+> - **Downloads** — no more zip; each file is saved individually with a timestamp filename
+>   (`20261007_143052.jpg`, suffixed `_1 _2` for multi-image posts), with the real failure
+>   reason surfaced and a retry for failed items. Size warning raised from 100MB to 500MB.
+> - **Navigation** — the left rail's 「主页 / 探索」became
+>   「全部关注 / 最新微博 / 特别关注」.
 
-[![Chrome Web Store version](https://img.shields.io/chrome-web-store/v/ffhppkcianllofhhjohbfbobjfppbeao?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/xb/ffhppkcianllofhhjohbfbobjfppbeao)
-[![Chrome Web Store users](https://img.shields.io/chrome-web-store/users/ffhppkcianllofhhjohbfbobjfppbeao?logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/xb/ffhppkcianllofhhjohbfbobjfppbeao)
-[![Firefox Add-ons version](https://img.shields.io/amo/v/xb?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/xb/)
-[![Firefox Add-ons users](https://img.shields.io/amo/users/xb?logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/xb/)
-[![Edge Add-ons version](https://img.shields.io/badge/dynamic/json?label=microsoft%20edge%20add-on&query=%24.version&url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fmojlbnkiahdmnfaffmelfcefohpfjjla)](https://microsoftedge.microsoft.com/addons/detail/xb/mojlbnkiahdmnfaffmelfcefohpfjjla)
-[![Landing page](https://img.shields.io/badge/website-xb--extension.vercel.app-000000?logo=vercel&logoColor=white)](https://xb-extension.vercel.app/)
+[![License](https://img.shields.io/github/license/GEMAngelaSaGill/weibo-xb)](./LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/GEMAngelaSaGill/weibo-xb)](https://github.com/GEMAngelaSaGill/weibo-xb/commits/main)
 
 [![Bun](https://img.shields.io/badge/bun-1.3.14-000000?logo=bun&logoColor=white)](https://bun.sh)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=black)](https://react.dev)
@@ -46,15 +54,26 @@ experience — similar to X.
 xb is a browser extension. Once installed, simply browse Weibo as usual and enjoy
 the beautifully redesigned interface.
 
-👉 Screenshots and more: [xb website](https://xb-extension.vercel.app/)
+👉 Screenshots and more: [xb website](https://xb-extension.vercel.app/) (upstream project)
 
 ## Install
 
-| Browser | Link                                                                                                  |
-| ------- | ----------------------------------------------------------------------------------------------------- |
-| Chrome  | [Chrome Web Store](https://chromewebstore.google.com/detail/xb/ffhppkcianllofhhjohbfbobjfppbeao)      |
-| Firefox | [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/xb/)                                 |
-| Edge    | [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/xb/mojlbnkiahdmnfaffmelfcefohpfjjla) |
+This fork is **not published to any store** — build it and load it unpacked:
+
+```bash
+bun install
+bun run build:edge    # output in .output/edge-mv3
+# or bun run build     # Chrome, output in .output/chrome-mv3
+```
+
+Then open `edge://extensions` (or `chrome://extensions`), enable **Developer mode**, click
+**Load unpacked** and select the output directory.
+
+> [!WARNING]
+> If you already have the store version of xb installed, **disable or remove it first** —
+> running both at once will break things.
+
+For the official build, see the upstream project: [nnecec/xb](https://github.com/nnecec/xb).
 
 ## Features
 
@@ -76,6 +95,19 @@ the beautifully redesigned interface.
 
 ## Credits
 
+All of the groundwork comes from the upstream project — thanks to
+[nnecec](https://github.com/nnecec) and its contributors:
+
+- **[nnecec/xb](https://github.com/nnecec/xb)** — upstream project, GPL-3.0
 - Inspired by [BewlyBewly](https://github.com/BewlyBewly/BewlyBewly) and
   [BewlyCat](https://github.com/keleus/BewlyCat)
 - [Linux Do](https://linux.do/) a friendly community
+
+The one-click sign-in API usage was informed by
+[Mokelichen/weibo-auto-sign](https://github.com/Mokelichen/weibo-auto-sign).
+
+## License
+
+[GPL-3.0](./LICENSE), same as upstream. This fork is a derivative work; copyright for the
+original code belongs to its authors, and the changes in this fork are released under the
+same license.
