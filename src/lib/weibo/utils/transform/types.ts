@@ -171,7 +171,13 @@ export interface WeiboStatus {
   attitudes_count?: number
   favorited?: boolean
   attitudes_status?: number | boolean
-  /** 服务端下发的操作菜单，见 `FeedMenuItem`。 */
+  /**
+   * 服务端下发的操作菜单，见 `FeedMenuItem`。
+   *
+   * 时间线主要走 `mblog_feed_back_menus_format`（几乎每条都带），
+   * `mblog_menus_new` 只在部分信息流里出现，作为兜底。
+   */
+  mblog_feed_back_menus_format?: Array<{ type?: unknown; name?: unknown; actionlog?: unknown }>
   mblog_menus_new?: Array<{ type?: unknown; name?: unknown; actionlog?: unknown }>
   title?: {
     text?: string

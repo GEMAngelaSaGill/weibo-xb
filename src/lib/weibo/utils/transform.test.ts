@@ -513,6 +513,29 @@ describe('toFeedItem 的操作菜单', () => {
     ])
   })
 
+  it('优先用 mblog_feed_back_menus_format（时间线实际下发的是它）', () => {
+    const item = toFeedItem({
+      ...base,
+      mblog_feed_back_menus_format: [
+        { type: 'mblog_menus_no_interst', name: '对该条博文不感兴趣', actionlog: { mid: '501' } },
+      ],
+      mblog_menus_new: [{ type: 'mblog_menus_report', name: '投诉' }],
+    } as never)
+
+    expect(item.menus).toEqual([
+      { type: 'mblog_menus_no_interst', name: '对该条博文不感兴趣', actionlog: { mid: '501' } },
+    ])
+  })
+
+  it('没有 feed_back 时退回 mblog_menus_new', () => {
+    const item = toFeedItem({
+      ...base,
+      mblog_menus_new: [{ type: 'mblog_menus_report', name: '投诉' }],
+    } as never)
+
+    expect(item.menus).toEqual([{ type: 'mblog_menus_report', name: '投诉', actionlog: undefined }])
+  })
+
   it('没有菜单时不带 menus 字段', () => {
     expect(toFeedItem(base as never).menus).toBeUndefined()
   })

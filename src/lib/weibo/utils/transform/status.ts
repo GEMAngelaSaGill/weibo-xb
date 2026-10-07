@@ -148,9 +148,14 @@ export function toFeedItem(status: WeiboStatus, includeRetweeted = true): FeedIt
 /**
  * 服务端下发的操作菜单。只保留有 type 和 name 的项——缺 name 的没法显示，
  * 缺 type 的没法路由到对应接口。
+ *
+ * 优先取 `mblog_feed_back_menus_format`：实测时间线上 14/14 条都带它，
+ * 而 `mblog_menus_new` 大面积缺失（0/14），只有部分信息流才会下发。
  */
 function toFeedMenus(status: WeiboStatus): FeedMenuItem[] {
-  const raw = status.mblog_menus_new
+  const raw = Array.isArray(status.mblog_feed_back_menus_format)
+    ? status.mblog_feed_back_menus_format
+    : status.mblog_menus_new
   if (!Array.isArray(raw)) return []
 
   return raw
