@@ -523,3 +523,38 @@ export async function optimisticallyToggleCommentLike(
 
   return context
 }
+
+/**
+ * 把一条微博从所有信息流缓存里摘掉。
+ *
+ * 用于「不感兴趣」这类反馈：微博服务端只把它计入后续推荐，**不会**把当前这条
+ * 从时间线里删掉，所以必须客户端自己移除——原生页面也是这么做的
+ * （`replaceWeiboWithFeedbackTipOrToast` 会把这条替换成一句提示）。
+ *
+ * 只动列表类的 infinite 缓存；正文详情页那种单条数据不动，免得把用户正在看的页面清空。
+ */
+export function removeStatusFromFeedCaches(queryClient: QueryClient, statusId: string): void {
+  for (const query of queryClient.getQueryCache().getAll()) {
+    const [scope] = query.queryKey as readonly unknown[]
+    if (scope !== 'weibo') continue
+
+    const data = query.state.data
+    if (!hasInfinitePages<unknown>(data)) continue
+
+    let changed = false
+    const pages = data.pages.map((page) => {
+      const items = page.items.filter((item) => {
+        if (!isFeedItem(item)) return true
+        const matched = item.id === statusId || item.retweetedStatus?.id === statusId
+        if (matched) changed = true
+        return !matched
+      })
+
+      return items.length === page.items.length ? page : { ...page, items }
+    })
+
+    if (changed) {
+      queryClient.setQueryData(query.queryKey, { ...data, pages })
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { Bookmark, Copy, Download, Image, Link, MoreHorizontal, Trash } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -24,6 +25,7 @@ import { useGenImageDialog } from '@/lib/weibo/components/gen-image-dialog-conte
 import { useFeedCardMediaDownload } from '@/lib/weibo/components/use-feed-card-media-download'
 import { sendFeedMenuFeedback, shieldStatus, shieldUser } from '@/lib/weibo/data/weibo-data'
 import type { FeedItem, FeedMenuItem } from '@/lib/weibo/models/feed'
+import { removeStatusFromFeedCaches } from '@/lib/weibo/queries/status-cache'
 
 type ContentType = 'status' | 'comment'
 
@@ -70,6 +72,7 @@ export function FeedCardMoreMenu({
   const [feedbackLoading, setFeedbackLoading] = useState(false)
   // 与原站一致：不看他的微博 = 否，禁止互动 = 是，禁止关注 = 否；三项全选即拉黑。
   const [shieldRange, setShieldRange] = useState({ status: false, interact: true, follow: false })
+  const queryClient = useQueryClient()
   const { openGenImage } = useGenImageDialog()
   const { downloadDialog, downloadLoading, handleDownload } = useFeedCardMediaDownload(item)
 
@@ -111,6 +114,7 @@ export function FeedCardMoreMenu({
 
     try {
       await sendFeedMenuFeedback(menu.actionlog)
+      if (item) removeStatusFromFeedCaches(queryClient, item.id)
       toast.success('已提交，将减少此类内容推荐', { id: toastId })
     } catch (error) {
       toast.error(`操作失败：${error instanceof Error ? error.message : '未知原因'}`, {
@@ -127,6 +131,7 @@ export function FeedCardMoreMenu({
 
     try {
       await shieldStatus(item.id)
+      removeStatusFromFeedCaches(queryClient, item.id)
       setShieldStatusOpen(false)
       toast.success('已屏蔽此条微博', { id: toastId })
     } catch (error) {

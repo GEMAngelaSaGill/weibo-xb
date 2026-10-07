@@ -9,6 +9,7 @@ import {
   optimisticallyToggleCommentLike,
   optimisticallyToggleStatusFavorite,
   optimisticallyToggleStatusLike,
+  removeStatusFromFeedCaches,
   restoreStatusCacheMutation,
   shouldCancelWeiboQueryForStatusMutation,
 } from '@/lib/weibo/queries/status-cache'
@@ -278,5 +279,61 @@ describe('shouldCancelWeiboQueryForStatusMutation', () => {
     expect(shouldCancelWeiboQueryForStatusMutation(['weibo', 'feed-comments', 'id'])).toBe(true)
     expect(shouldCancelWeiboQueryForStatusMutation(['weibo', 'topic', 'slug'])).toBe(true)
     expect(shouldCancelWeiboQueryForStatusMutation(['weibo', 'notifications'])).toBe(true)
+  })
+})
+
+describe('removeStatusFromFeedCaches', () => {
+  it('把指定微博从信息流缓存里摘掉', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['weibo', 'home'], {
+      pages: [{ items: [createFeedItem({ id: 'a' }), createFeedItem({ id: 'b' })] }],
+      pageParams: [1],
+    })
+
+    removeStatusFromFeedCaches(queryClient, 'b')
+
+    const data = queryClient.getQueryData<{ pages: Array<{ items: FeedItem[] }> }>([
+      'weibo',
+      'home',
+    ])
+    expect(data?.pages[0]?.items.map((item) => item.id)).toEqual(['a'])
+  })
+
+  it('也能摘掉转发里的原微博', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['weibo', 'home'], {
+      pages: [
+        {
+          items: [
+            createFeedItem({ id: 'outer', retweetedStatus: createFeedItem({ id: 'inner' }) }),
+          ],
+        },
+      ],
+      pageParams: [1],
+    })
+
+    removeStatusFromFeedCaches(queryClient, 'inner')
+
+    const data = queryClient.getQueryData<{ pages: Array<{ items: FeedItem[] }> }>([
+      'weibo',
+      'home',
+    ])
+    expect(data?.pages[0]?.items).toEqual([])
+  })
+
+  it('不碰非 weibo 命名空间和单条详情数据', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['other', 'x'], { pages: [{ items: [createFeedItem({ id: 'b' })] }] })
+    queryClient.setQueryData(['weibo', 'status', 'b'], { status: createFeedItem({ id: 'b' }) })
+
+    removeStatusFromFeedCaches(queryClient, 'b')
+
+    expect(
+      queryClient.getQueryData<{ pages: Array<{ items: FeedItem[] }> }>(['other', 'x'])?.pages[0]
+        ?.items,
+    ).toHaveLength(1)
+    expect(
+      queryClient.getQueryData<{ status: FeedItem }>(['weibo', 'status', 'b'])?.status.id,
+    ).toBe('b')
   })
 })
