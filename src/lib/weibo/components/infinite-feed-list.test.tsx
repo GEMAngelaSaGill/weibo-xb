@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { APP_SETTINGS_STORAGE_KEY } from '@/lib/app-settings'
+import { getAppSettingsStore, resetAppSettingsStoreForTest } from '@/lib/app-settings-store'
 import { InfiniteFeedList } from '@/lib/weibo/components/infinite-feed-list'
 import type { FeedItem } from '@/lib/weibo/models/feed'
 
@@ -48,6 +50,23 @@ describe('InfiniteFeedList', () => {
   beforeEach(() => {
     TestIntersectionObserver.instances = []
     vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
+    Object.defineProperty(globalThis, 'browser', {
+      writable: true,
+      configurable: true,
+      value: {
+        storage: {
+          local: {
+            get: vi.fn(async () => ({})),
+            set: vi.fn(async () => {}),
+          },
+        },
+      },
+    })
+    resetAppSettingsStoreForTest()
+    getAppSettingsStore({
+      get: async () => ({ [APP_SETTINGS_STORAGE_KEY]: undefined }),
+      set: async () => {},
+    }).setState({ ...getAppSettingsStore().getState(), isHydrated: true })
   })
 
   it('renders loading and error states through one interface', () => {

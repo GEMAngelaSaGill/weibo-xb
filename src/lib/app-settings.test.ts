@@ -136,6 +136,7 @@ describe('app-settings', () => {
     expect(await loadAppSettings(storage)).toEqual({
       contentWidth: 'standard',
       customContentWidth: 1200,
+      blockedKeywords: [],
       theme: 'dark',
       rewriteEnabled: false,
       uiFontSize: 14,
@@ -273,6 +274,7 @@ describe('app-settings', () => {
         feedInteractionMode: 'x',
         feedPrimaryActionOrder: ['comment', 'repost', 'like'],
         feedToolbarButtonIds: [],
+        blockedKeywords: [],
         browsingHistoryLimit: 300,
         xbTopicPage: true,
         ratingEnabled: true,
@@ -295,6 +297,7 @@ describe('app-settings', () => {
     expect(storage.read()).toEqual({
       contentWidth: 'standard',
       customContentWidth: 1200,
+      blockedKeywords: [],
       theme: 'light',
       rewriteEnabled: true,
       uiFontSize: 18,

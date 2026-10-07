@@ -237,6 +237,8 @@ export interface AppSettings {
   feedInteractionMode: FeedInteractionMode
   feedPrimaryActionOrder: FeedPrimaryActionId[]
   feedToolbarButtonIds: FeedToolbarButtonId[]
+  /** 命中的帖子不进信息流；大小写不敏感，按子串匹配。 */
+  blockedKeywords: string[]
   browsingHistoryLimit: BrowsingHistoryLimit
   xbTopicPage: boolean
   ratingEnabled: boolean
@@ -335,6 +337,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   feedInteractionMode: 'x',
   feedPrimaryActionOrder: ['comment', 'repost', 'like'],
   feedToolbarButtonIds: [],
+  blockedKeywords: [],
   browsingHistoryLimit: 200,
   xbTopicPage: true,
   ratingEnabled: false,
@@ -528,6 +531,35 @@ function normalizeFeedToolbarButtonIds(value: unknown): FeedToolbarButtonId[] {
   return value.filter(isFeedToolbarButtonId).filter((id, index, list) => {
     return list.indexOf(id) === index
   })
+}
+
+/** 关键词去掉首尾空白、丢掉空串、去重；单个关键词限长，避免误粘一整段文本。 */
+const MAX_BLOCKED_KEYWORD_LENGTH = 50
+const MAX_BLOCKED_KEYWORDS = 200
+
+function normalizeBlockedKeywords(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return DEFAULT_APP_SETTINGS.blockedKeywords
+  }
+
+  const seen = new Set<string>()
+  const result: string[] = []
+
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue
+
+    const keyword = entry.trim().slice(0, MAX_BLOCKED_KEYWORD_LENGTH)
+    if (!keyword) continue
+
+    const dedupeKey = keyword.toLowerCase()
+    if (seen.has(dedupeKey)) continue
+
+    seen.add(dedupeKey)
+    result.push(keyword)
+    if (result.length >= MAX_BLOCKED_KEYWORDS) break
+  }
+
+  return result
 }
 
 function isLightBgColorPreset(value: unknown): value is LightBgColorPreset {
@@ -873,6 +905,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
         : DEFAULT_APP_SETTINGS.feedInteractionMode,
     feedPrimaryActionOrder: normalizeFeedPrimaryActionOrder(candidate.feedPrimaryActionOrder),
     feedToolbarButtonIds: normalizeFeedToolbarButtonIds(candidate.feedToolbarButtonIds),
+    blockedKeywords: normalizeBlockedKeywords(candidate.blockedKeywords),
     browsingHistoryLimit: isBrowsingHistoryLimit(candidate.browsingHistoryLimit)
       ? candidate.browsingHistoryLimit
       : DEFAULT_APP_SETTINGS.browsingHistoryLimit,

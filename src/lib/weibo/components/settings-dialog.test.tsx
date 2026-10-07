@@ -206,6 +206,7 @@ describe('SettingsDialog', () => {
     expect(mockUpdateSettings).toHaveBeenCalledWith({
       feedDensity: DEFAULT_APP_SETTINGS.feedDensity,
       autoLoadLongText: DEFAULT_APP_SETTINGS.autoLoadLongText,
+      blockedKeywords: DEFAULT_APP_SETTINGS.blockedKeywords,
     })
   })
 

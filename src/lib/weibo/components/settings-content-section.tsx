@@ -1,3 +1,8 @@
+import { X } from 'lucide-react'
+import { useState } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -19,7 +24,71 @@ import {
 const FEED_SETTING_KEYS = [
   'feedDensity',
   'autoLoadLongText',
+  'blockedKeywords',
 ] as const satisfies readonly (keyof AppSettings)[]
+
+/** 关键词的增删。命中判定在渲染层做，这里只管维护列表。 */
+function BlockedKeywordsField({
+  keywords,
+  onChange,
+}: {
+  keywords: string[]
+  onChange: (next: string[]) => void
+}) {
+  const [draft, setDraft] = useState('')
+
+  const addKeyword = () => {
+    const keyword = draft.trim()
+    if (!keyword) return
+
+    const exists = keywords.some((item) => item.toLowerCase() === keyword.toLowerCase())
+    if (!exists) onChange([...keywords, keyword])
+    setDraft('')
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          placeholder="输入关键词后回车"
+          aria-label="添加屏蔽关键词"
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            addKeyword()
+          }}
+        />
+        <Button type="button" variant="secondary" onClick={addKeyword} disabled={!draft.trim()}>
+          添加
+        </Button>
+      </div>
+      {keywords.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {keywords.map((keyword) => (
+            <span
+              key={keyword}
+              className="bg-muted text-foreground inline-flex items-center gap-1 rounded-full py-1 ps-2.5 pe-1 text-xs"
+            >
+              {keyword}
+              <button
+                type="button"
+                aria-label={`移除 ${keyword}`}
+                className="hover:bg-background/60 focus-visible:ring-ring/50 rounded-full p-0.5 focus-visible:ring-2 focus-visible:outline-none"
+                onClick={() => onChange(keywords.filter((item) => item !== keyword))}
+              >
+                <X className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-xs">还没有屏蔽词。</p>
+      )}
+    </div>
+  )
+}
 
 const WEIBO_SETTING_KEYS = [
   'weiboCardShowAvatar',
@@ -50,6 +119,7 @@ export function SettingsFeedSection({
     useShallow((state) => ({
       feedDensity: state.feedDensity,
       autoLoadLongText: state.autoLoadLongText,
+      blockedKeywords: state.blockedKeywords,
     })),
   )
 
@@ -72,6 +142,15 @@ export function SettingsFeedSection({
           aria-label="自动查看全文"
           checked={settings.autoLoadLongText}
           onCheckedChange={(checked) => void updateSettings({ autoLoadLongText: checked })}
+        />
+      </Field>
+      <Field
+        label="屏蔽关键词"
+        description="正文里出现这些词的帖子不会进入信息流；转发会连带原微博正文一起匹配，作者名不参与匹配"
+      >
+        <BlockedKeywordsField
+          keywords={settings.blockedKeywords}
+          onChange={(next) => void updateSettings({ blockedKeywords: next })}
         />
       </Field>
       <ResetSectionButton

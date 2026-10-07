@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { useAppSettings } from '@/lib/app-settings-store'
 import { PageEmptyState, PageErrorState, PageLoadingState } from '@/lib/weibo/components/page-state'
 import { StatusCard } from '@/lib/weibo/components/status-card'
 import { flattenInfiniteItems } from '@/lib/weibo/data/weibo-data'
 import type { FeedItem } from '@/lib/weibo/models/feed'
 import { useFeedRatingBatchSync } from '@/lib/weibo/rating/xb-rating'
+import { filterBlockedStatuses } from '@/lib/weibo/utils/keyword-filter'
 
 interface InfiniteFeedListProps {
   pages: Array<{ items: FeedItem[] }> | undefined
@@ -41,7 +43,12 @@ export function InfiniteFeedList({
   fetchNextPageRef.current = fetchNextPage
   isFetchingNextPageRef.current = isFetchingNextPage
 
-  const items = useMemo(() => flattenInfiniteItems<FeedItem>(pages), [pages])
+  // 关键词屏蔽在渲染这一层收口，所有走这个列表的信息流都自动生效。
+  const blockedKeywords = useAppSettings((state) => state.blockedKeywords)
+  const items = useMemo(
+    () => filterBlockedStatuses(flattenInfiniteItems<FeedItem>(pages), blockedKeywords),
+    [pages, blockedKeywords],
+  )
   const hasItems = items.length > 0
   const showInitialError = Boolean(errorMessage) && !hasItems
   const showFeed = !showInitialError
