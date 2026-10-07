@@ -171,6 +171,8 @@ export interface WeiboStatus {
   attitudes_count?: number
   favorited?: boolean
   attitudes_status?: number | boolean
+  /** 服务端下发的操作菜单，见 `FeedMenuItem`。 */
+  mblog_menus_new?: Array<{ type?: unknown; name?: unknown; actionlog?: unknown }>
   title?: {
     text?: string
   }

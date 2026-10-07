@@ -489,3 +489,45 @@ describe('toFeedItem markdown', () => {
     expect(result.markdownText).toBe('# Full\n\n**body**')
   })
 })
+
+describe('toFeedItem 的操作菜单', () => {
+  const base = {
+    idstr: '501',
+    text_raw: '正文',
+    created_at: 'Tue Apr 08 10:00:00 +0800 2026',
+    user: { idstr: '1001', screen_name: '张三' },
+  }
+
+  it('把服务端下发的 mblog_menus_new 转成 menus', () => {
+    const item = toFeedItem({
+      ...base,
+      mblog_menus_new: [
+        { type: 'mblog_menus_no_interst', name: '对该条博文不感兴趣', actionlog: { mid: '501' } },
+        { type: 'mblog_menus_shield', name: '屏蔽' },
+      ],
+    } as never)
+
+    expect(item.menus).toEqual([
+      { type: 'mblog_menus_no_interst', name: '对该条博文不感兴趣', actionlog: { mid: '501' } },
+      { type: 'mblog_menus_shield', name: '屏蔽', actionlog: undefined },
+    ])
+  })
+
+  it('没有菜单时不带 menus 字段', () => {
+    expect(toFeedItem(base as never).menus).toBeUndefined()
+  })
+
+  it('丢掉缺 type 或 name 的畸形条目', () => {
+    const item = toFeedItem({
+      ...base,
+      mblog_menus_new: [
+        { name: '没有 type' },
+        { type: 'mblog_menus_report' },
+        { type: '', name: '空 type' },
+        { type: 'mblog_menus_report', name: '投诉' },
+      ],
+    } as never)
+
+    expect(item.menus).toEqual([{ type: 'mblog_menus_report', name: '投诉', actionlog: undefined }])
+  })
+})

@@ -120,6 +120,19 @@ export interface FeedItem {
     text: string
   }
   retweetedStatus?: Omit<FeedItem, 'retweetedStatus'> | null
+  /**
+   * 微博服务端下发的操作菜单（`mblog_menus_new`），如「不感兴趣」「屏蔽」「投诉」。
+   * 文案、顺序、哪些项可用都由服务端决定，客户端只负责渲染和发请求。
+   */
+  menus?: FeedMenuItem[]
+}
+
+export interface FeedMenuItem {
+  /** 例如 `mblog_menus_no_interst` / `mblog_menus_shield` / `mblog_menus_report` */
+  type: string
+  name: string
+  /** 服务端算好的反馈凭证，`throwbatch` 这类接口必须原样回传。 */
+  actionlog?: unknown
 }
 
 export interface TopicChannel {

@@ -3,7 +3,7 @@
  * Converts Weibo status objects to FeedItem format.
  */
 
-import type { FeedEmoticon, FeedImage, FeedItem } from '@/lib/weibo/models/feed'
+import type { FeedEmoticon, FeedImage, FeedItem, FeedMenuItem } from '@/lib/weibo/models/feed'
 import { formatCreatedAt } from '@/lib/weibo/services/utils/date'
 
 import { getStatusAuthor } from './author'
@@ -138,10 +138,30 @@ export function toFeedItem(status: WeiboStatus, includeRetweeted = true): FeedIt
     regionName: status.region_name ?? '',
     source: stripHtmlTags(status.source ?? ''),
     ...(status.title?.text ? { title: { text: status.title.text } } : {}),
+    ...(toFeedMenus(status).length > 0 ? { menus: toFeedMenus(status) } : {}),
     ...(normalizedRetweetedStatus
       ? { retweetedStatus: toFeedItem(normalizedRetweetedStatus, false) }
       : {}),
   }
+}
+
+/**
+ * 服务端下发的操作菜单。只保留有 type 和 name 的项——缺 name 的没法显示，
+ * 缺 type 的没法路由到对应接口。
+ */
+function toFeedMenus(status: WeiboStatus): FeedMenuItem[] {
+  const raw = status.mblog_menus_new
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .filter(
+      (item): item is { type: string; name: string; actionlog?: unknown } =>
+        typeof item?.type === 'string' &&
+        item.type !== '' &&
+        typeof item?.name === 'string' &&
+        item.name !== '',
+    )
+    .map((item) => ({ type: item.type, name: item.name, actionlog: item.actionlog }))
 }
 
 /**
