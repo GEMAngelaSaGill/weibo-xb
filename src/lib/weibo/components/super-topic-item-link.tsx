@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react'
 import { Link } from 'react-router'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -22,9 +23,11 @@ export function toInAppSuperTopicPath(link: string): string | null {
 interface SuperTopicItemLinkProps {
   item: SuperTopicItem
   className?: string
+  /** 今天已签到，在右侧打勾 */
+  checked?: boolean
 }
 
-export function SuperTopicItemLink({ item, className }: SuperTopicItemLinkProps) {
+export function SuperTopicItemLink({ item, className, checked = false }: SuperTopicItemLinkProps) {
   const fallback = item.title.trim().slice(0, 1) || '#'
   const rowClassName = cn(
     'group hover:bg-accent/80 focus-visible:bg-accent/80 focus-visible:ring-ring/50 flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
@@ -44,6 +47,15 @@ export function SuperTopicItemLink({ item, className }: SuperTopicItemLinkProps)
           {item.fansText || item.intro || '超话'}
         </span>
       </span>
+      {checked ? (
+        <span
+          className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-[11px]"
+          title="今天已签到"
+        >
+          <Check className="size-3.5" aria-hidden="true" />
+          已签
+        </span>
+      ) : null}
     </>
   )
 

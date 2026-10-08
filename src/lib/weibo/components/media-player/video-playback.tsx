@@ -36,46 +36,6 @@ interface VideoPlaybackProps {
   onPictureInPictureChange?: (active: boolean) => void
 }
 
-interface MediaFetchResponse {
-  ok: boolean
-  data?: string
-  contentType?: string
-  error?: string
-}
-
-function base64ToBlob(data: string, contentType = 'video/mp4') {
-  const binary = atob(data)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index++) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return new Blob([bytes], { type: contentType })
-}
-
-export async function fetchVideoBlob(url: string) {
-  let directFetchError: unknown
-  try {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    return await response.blob()
-  } catch (error) {
-    directFetchError = error
-  }
-
-  if (typeof browser !== 'undefined' && browser.runtime?.sendMessage) {
-    const response = (await browser.runtime.sendMessage({
-      type: 'media-fetch',
-      url,
-    })) as MediaFetchResponse
-    if (!response.ok || !response.data) {
-      throw new Error(response.error || '视频下载失败')
-    }
-    return base64ToBlob(response.data, response.contentType)
-  }
-
-  throw directFetchError instanceof Error ? directFetchError : new Error('视频下载失败')
-}
-
 function LiveOverlay({ onLoad, onPlay }: { onLoad: () => void; onPlay: () => void }) {
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center">

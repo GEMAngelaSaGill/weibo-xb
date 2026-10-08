@@ -5,6 +5,7 @@ import { Outlet, useNavigate } from 'react-router'
 import type { HomeTab } from '@/lib/app-settings'
 import { useAppSettings, useShallow } from '@/lib/app-settings-store'
 import { RewritePausedCard, ShellFrame } from '@/lib/weibo/app/app-shell-layout'
+import { useAutoSuperTopicCheckin } from '@/lib/weibo/checkin/use-auto-super-topic-checkin'
 import { AuthRequiredDialog } from '@/lib/weibo/components/auth-required-dialog'
 import { CommentModal } from '@/lib/weibo/components/comment-modal'
 import { ComposeDialog } from '@/lib/weibo/components/compose-dialog'
@@ -38,6 +39,9 @@ export interface AppShellContext {
 }
 
 export function AppShell() {
+  // 打开微博时尝试自动签到一次；跑不跑由后台按「当天是否已签」决定。
+  useAutoSuperTopicCheckin()
+
   const navigate = useNavigate()
   const page = useWeiboPage()
   const queryClient = useQueryClient()

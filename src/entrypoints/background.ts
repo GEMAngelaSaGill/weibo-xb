@@ -1,9 +1,17 @@
 import { defineBackground } from 'wxt/utils/define-background'
 
+import {
+  appendCheckinLog,
+  loadAutoCheckinState,
+  localDateString,
+  saveAutoCheckinState,
+  type CheckinTrigger,
+} from '@/lib/weibo/checkin/checkin-log'
 import type { MweiboFetchResponse } from '@/lib/weibo/platform/messages'
 
 export default defineBackground(() => {
   void ensureMediaRequestHeaderRules()
+  void ensureFallbackCheckinAlarm()
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'mweibo-fetch') {
@@ -27,6 +35,14 @@ export default defineBackground(() => {
             error: err instanceof Error ? err.message : 'Unknown error',
           })
         })
+      return true
+    }
+
+    if (message?.type === 'checkin-claim') {
+      // 内容脚本问「我现在可以自动签到吗」——决定权收在后台，避免多标签页各签一遍。
+      claimAutoCheckin((message as { trigger?: CheckinTrigger }).trigger ?? 'auto-open')
+        .then((granted) => sendResponse({ granted }))
+        .catch(() => sendResponse({ granted: false }))
       return true
     }
 
@@ -414,3 +430,89 @@ export async function handleMediaFetch(
     data: arrayBufferToBase64(data.data),
   }
 }
+
+// ─── 超话自动签到调度 ───
+//
+// 两个触发点：
+//   1. 打开 weibo.com 时内容脚本问一句（主力）
+//   2. 每天 22:00 的 alarms 保底（当天一直没签才跑）
+// 判定「今天签过没有」的标记**在开工之前**就落盘，宁可漏签不可重发。
+
+const FALLBACK_CHECKIN_ALARM = 'xb-super-topic-checkin-fallback'
+const FALLBACK_CHECKIN_HOUR = 22
+
+/** 单个 SW 生命周期内的串行锁：storage 的读-改-写挡不住同刻并发，这个能。 */
+let autoCheckinClaimed = false
+
+export async function claimAutoCheckin(trigger: CheckinTrigger): Promise<boolean> {
+  if (autoCheckinClaimed) return false
+
+  const today = localDateString()
+  const state = await loadAutoCheckinState()
+  if (state?.date === today) return false
+
+  autoCheckinClaimed = true
+  await saveAutoCheckinState({
+    date: today,
+    startedAt: Date.now(),
+    trigger,
+    status: 'running',
+  })
+
+  return true
+}
+
+async function ensureFallbackCheckinAlarm(): Promise<void> {
+  try {
+    const existing = await browser.alarms.get(FALLBACK_CHECKIN_ALARM)
+    if (existing) return
+
+    const next = new Date()
+    next.setHours(FALLBACK_CHECKIN_HOUR, 0, 0, 0)
+    if (next.getTime() <= Date.now()) {
+      next.setDate(next.getDate() + 1)
+    }
+
+    await browser.alarms.create(FALLBACK_CHECKIN_ALARM, {
+      when: next.getTime(),
+      periodInMinutes: 24 * 60,
+    })
+  } catch (error) {
+    console.warn('注册签到保底闹钟失败', error)
+  }
+}
+
+/**
+ * 22 点保底：当天还没签就补一次。
+ *
+ * IO 走的是页面桥接，后台自己发不了请求，所以得有一个 weibo.com 标签页在跑——
+ * 没有就临时开一个后台标签页，签完自己关掉（查询参数就是给那边的信号）。
+ */
+async function runFallbackCheckin(): Promise<void> {
+  if (!(await claimAutoCheckin('auto-fallback'))) return
+
+  try {
+    const [existing] = await browser.tabs.query({ url: 'https://weibo.com/*' })
+    if (existing?.id !== undefined) {
+      await browser.tabs.sendMessage(existing.id, { type: 'checkin-run' })
+      return
+    }
+
+    await browser.tabs.create({ url: 'https://weibo.com/?xb_checkin=auto', active: false })
+  } catch (error) {
+    await appendCheckinLog({
+      at: Date.now(),
+      trigger: 'auto-fallback',
+      total: 0,
+      signed: 0,
+      already: 0,
+      failed: [],
+      error: error instanceof Error ? error.message : '保底签到启动失败',
+    })
+  }
+}
+
+browser.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name !== FALLBACK_CHECKIN_ALARM) return
+  void runFallbackCheckin()
+})

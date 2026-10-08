@@ -1,23 +1,36 @@
 import { useInfiniteQuery } from '@tanstack/react-query'
+import { CalendarCheck, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import { useAppSettings } from '@/lib/app-settings-store'
 import { useImmersiveHeaderClassName } from '@/lib/weibo/app/immersive-header'
 import { ChannelBar, type ChannelBarItem } from '@/lib/weibo/components/channel-bar'
 import { InfiniteFeedList } from '@/lib/weibo/components/infinite-feed-list'
-import { superTopicFlowInfiniteOptions } from '@/lib/weibo/data/weibo-data'
+import { signSuperTopic, superTopicFlowInfiniteOptions } from '@/lib/weibo/data/weibo-data'
 import type { SuperTopicFlowPage, SuperTopicHeader } from '@/lib/weibo/models/super-topic'
 import { useWeiboPage } from '@/lib/weibo/route/use-weibo-page'
 
-function SuperTopicHead({ header }: { header: SuperTopicHeader }) {
+function SuperTopicHead({
+  header,
+  onCheckin,
+  checking,
+  disabled,
+}: {
+  header: SuperTopicHeader
+  onCheckin: () => void
+  checking: boolean
+  disabled: boolean
+}) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <Avatar className="size-12 shrink-0">
         <AvatarImage src={header.avatarUrl} alt={header.name} />
         <AvatarFallback>{header.name.slice(0, 1)}</AvatarFallback>
       </Avatar>
-      <div className="flex min-w-0 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <h2 className="truncate text-lg leading-tight font-semibold">{header.name}</h2>
         {header.stats.length > 0 ? (
           <div className="text-muted-foreground flex gap-3 text-xs">
@@ -29,6 +42,22 @@ function SuperTopicHead({ header }: { header: SuperTopicHeader }) {
           </div>
         ) : null}
       </div>
+      {/* 只签当前这个超话；签全部去「我的超话」列表页 */}
+      <Button
+        variant="secondary"
+        size="sm"
+        className="shrink-0"
+        aria-label="签到本超话"
+        disabled={checking || disabled}
+        onClick={onCheckin}
+      >
+        {checking ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <CalendarCheck className="size-4" />
+        )}
+        签到
+      </Button>
     </div>
   )
 }
@@ -42,6 +71,7 @@ export function SuperTopicPage() {
   const isEnabled = rewriteEnabled && page.kind === 'super-topic' && superTopicId !== ''
 
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
 
   const flowQuery = useInfiniteQuery({
     ...superTopicFlowInfiniteOptions(superTopicId, selectedFlowId),
@@ -78,6 +108,31 @@ export function SuperTopicPage() {
     setSelectedFlowId(flowId)
   }, [])
 
+  const handleCheckin = useCallback(() => {
+    if (checking || !superTopicId) return
+    setChecking(true)
+    const toastId = toast('正在签到…')
+
+    void (async () => {
+      try {
+        const outcome = await signSuperTopic(superTopicId)
+        if (outcome.status === 'failed') {
+          toast.error(`签到失败：${outcome.message}`, { id: toastId })
+        } else if (outcome.status === 'already') {
+          toast.success('今天已经签过了', { id: toastId })
+        } else {
+          toast.success(outcome.message, { id: toastId })
+        }
+      } catch (error) {
+        toast.error(`签到失败：${error instanceof Error ? error.message : '未知原因'}`, {
+          id: toastId,
+        })
+      } finally {
+        setChecking(false)
+      }
+    })()
+  }, [checking, superTopicId])
+
   const isInitialError = flowQuery.error instanceof Error && !flowQuery.isFetchNextPageError
   const isLoadMoreError = flowQuery.error instanceof Error && flowQuery.isFetchNextPageError
   const errorMessage = isInitialError ? '超话内容加载失败，请稍后重试。' : null
@@ -86,7 +141,14 @@ export function SuperTopicPage() {
   return (
     <div className="flex flex-col gap-3">
       <div className={headerClassName}>
-        {header ? <SuperTopicHead header={header} /> : null}
+        {header ? (
+          <SuperTopicHead
+            header={header}
+            onCheckin={handleCheckin}
+            checking={checking}
+            disabled={!superTopicId}
+          />
+        ) : null}
         {channelItems.length > 0 ? (
           <ChannelBar
             items={channelItems}

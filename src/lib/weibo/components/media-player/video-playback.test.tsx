@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchVideoBlob, VideoPlayback } from './video-playback'
+import { VideoPlayback } from './video-playback'
 import { resetPlaybackPositionStoreForTest } from './video-playback-position-store'
 import { isVideoPlaybackActive } from './video-player-skin'
 import {
@@ -187,25 +187,6 @@ describe('VideoPlayback', () => {
 
     expect(setValue).toHaveBeenCalledWith('2')
     expect(screen.queryByRole('button', { name: '播放设置' })).not.toBeInTheDocument()
-  })
-
-  it('downloads a video through the extension media proxy', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('CORS'))
-    const sendMessage = vi.fn(async () => ({
-      ok: true,
-      data: btoa('video'),
-      contentType: 'video/mp4',
-    }))
-    Object.assign(browser.runtime, { sendMessage })
-    const blob = await fetchVideoBlob('https://f.video.weibocdn.com/video.mp4')
-
-    expect(fetchMock).toHaveBeenCalledWith('https://f.video.weibocdn.com/video.mp4')
-    expect(sendMessage).toHaveBeenCalledWith({
-      type: 'media-fetch',
-      url: 'https://f.video.weibocdn.com/video.mp4',
-    })
-    expect(blob.type).toBe('video/mp4')
-    expect(blob.size).toBe(5)
   })
 
   it('renders an unavailable live asset without interactive controls', () => {

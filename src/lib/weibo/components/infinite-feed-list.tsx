@@ -45,10 +45,12 @@ export function InfiniteFeedList({
 
   // 关键词屏蔽在渲染这一层收口，所有走这个列表的信息流都自动生效。
   const blockedKeywords = useAppSettings((state) => state.blockedKeywords)
+  const allItems = useMemo(() => flattenInfiniteItems<FeedItem>(pages), [pages])
   const items = useMemo(
-    () => filterBlockedStatuses(flattenInfiniteItems<FeedItem>(pages), blockedKeywords),
-    [pages, blockedKeywords],
+    () => filterBlockedStatuses(allItems, blockedKeywords),
+    [allItems, blockedKeywords],
   )
+  const blockedCount = allItems.length - items.length
   const hasItems = items.length > 0
   const showInitialError = Boolean(errorMessage) && !hasItems
   const showFeed = !showInitialError
@@ -96,12 +98,22 @@ export function InfiniteFeedList({
         {!isLoading && showFeed ? (
           items.length > 0 ? (
             <div className="flex flex-col gap-3">
+              {/* 屏蔽掉内容时给个交代，否则页面凭空少一截容易以为加载失败 */}
+              {blockedCount > 0 ? (
+                <p className="text-muted-foreground px-1 text-xs">
+                  已按屏蔽关键词隐藏 {blockedCount} 条
+                </p>
+              ) : null}
               {items.map((item) => (
                 <div key={item.id} data-feed-id={item.id}>
                   <StatusCard status={item} />
                 </div>
               ))}
             </div>
+          ) : blockedCount > 0 ? (
+            <p className="text-muted-foreground py-6 text-center text-sm">
+              这一批内容都被屏蔽关键词隐藏了（共 {blockedCount} 条）
+            </p>
           ) : (
             <PageEmptyState label={emptyLabel} onRetry={onRetry} />
           )
