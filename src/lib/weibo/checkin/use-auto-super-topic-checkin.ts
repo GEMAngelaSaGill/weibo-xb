@@ -68,7 +68,7 @@ export function useAutoSuperTopicCheckin(): void {
     const runtime = browser?.runtime
     if (!runtime?.sendMessage || !runtime?.onMessage) return
 
-    // 22 点保底：后台开的临时标签页，签完要自己关掉。
+    // 保底唤醒：后台开的临时标签页，签完要自己关掉。
     const isFallbackTab =
       new URLSearchParams(window.location.search).get(FALLBACK_TAB_PARAM) === 'auto'
 

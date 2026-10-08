@@ -439,7 +439,7 @@ export async function handleMediaFetch(
 // 判定「今天签过没有」的标记**在开工之前**就落盘，宁可漏签不可重发。
 
 const FALLBACK_CHECKIN_ALARM = 'xb-super-topic-checkin-fallback'
-const FALLBACK_CHECKIN_HOUR = 22
+const FALLBACK_CHECKIN_HOUR = 20
 
 /** 单个 SW 生命周期内的串行锁：storage 的读-改-写挡不住同刻并发，这个能。 */
 let autoCheckinClaimed = false
@@ -462,11 +462,14 @@ export async function claimAutoCheckin(trigger: CheckinTrigger): Promise<boolean
   return true
 }
 
+/**
+ * 注册（或重注册）保底闹钟。
+ *
+ * 每次都重建而不是「有就跳过」——否则改了保底时间之后，浏览器里那个旧闹钟会一直赖着，
+ * 新配置永远不生效。create 同名闹钟本身就是覆盖，重复调用是幂等的。
+ */
 async function ensureFallbackCheckinAlarm(): Promise<void> {
   try {
-    const existing = await browser.alarms.get(FALLBACK_CHECKIN_ALARM)
-    if (existing) return
-
     const next = new Date()
     next.setHours(FALLBACK_CHECKIN_HOUR, 0, 0, 0)
     if (next.getTime() <= Date.now()) {
@@ -483,7 +486,7 @@ async function ensureFallbackCheckinAlarm(): Promise<void> {
 }
 
 /**
- * 22 点保底：当天还没签就补一次。
+ * 20 点保底：当天还没签就补一次。
  *
  * IO 走的是页面桥接，后台自己发不了请求，所以得有一个 weibo.com 标签页在跑——
  * 没有就临时开一个后台标签页，签完自己关掉（查询参数就是给那边的信号）。

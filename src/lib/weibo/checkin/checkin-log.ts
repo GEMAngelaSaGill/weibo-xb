@@ -2,7 +2,7 @@
  * 超话签到日志。
  *
  * 存在 `chrome.storage.local`（不是页面 localStorage）——后台脚本和内容脚本都要读写，
- * 而且后台在 22 点保底唤醒时也得能判断"今天签过没有"。
+ * 而且后台在保底时间唤醒时也得能判断"今天签过没有"。
  */
 
 const STORAGE_KEY = 'xb:super-topic-checkin-log'
@@ -104,7 +104,7 @@ export function describeCheckinTrigger(trigger: CheckinTrigger): string {
     case 'auto-open':
       return '自动（打开微博）'
     case 'auto-fallback':
-      return '自动（22 点保底）'
+      return '自动（20 点保底）'
     default:
       return '手动'
   }
