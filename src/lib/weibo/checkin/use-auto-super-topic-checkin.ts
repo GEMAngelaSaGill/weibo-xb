@@ -55,6 +55,26 @@ async function executeCheckin(trigger: CheckinTrigger, closeTabWhenDone: boolean
 }
 
 /**
+ * 拿不到后台许可时记一条日志。
+ *
+ * 这个调用以前是被 catch 静静吞掉的——结果某天自动签到没跑，日志里一片空白，
+ * 只能翻存储文件才查出「请求根本没送到」。失败必须留痕。
+ */
+async function logClaimFailure(trigger: CheckinTrigger, error: unknown): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error)
+
+  await appendCheckinLog({
+    at: Date.now(),
+    trigger,
+    total: 0,
+    signed: 0,
+    already: 0,
+    failed: [],
+    error: `申请自动签到失败：${message}`,
+  })
+}
+
+/**
  * 打开微博时尝试自动签到一次。
  *
  * 是否真的跑由后台决定（后台持有当天的日期标记和串行锁），这里只负责问一句、跑完上报。
@@ -78,17 +98,25 @@ export function useAutoSuperTopicCheckin(): void {
       void (async () => {
         const trigger: CheckinTrigger = isFallbackTab ? 'auto-fallback' : 'auto-open'
 
+        let granted = false
+
         try {
           const claim = (await runtime.sendMessage({ type: 'checkin-claim', trigger })) as
             | { granted?: boolean }
             | undefined
 
-          if (!claim?.granted) {
-            // 今天已经跑过了；保底标签页没有存在的意义了。
-            if (isFallbackTab) window.close()
-            return
+          if (claim === undefined) {
+            // 后台没回结果。以前这里是静默返回的，出了问题日志里什么都看不到。
+            await logClaimFailure(trigger, new Error('后台没有返回结果'))
+          } else {
+            granted = claim.granted === true
           }
-        } catch {
+        } catch (error) {
+          await logClaimFailure(trigger, error)
+        }
+
+        if (!granted) {
+          // 要么今天已经跑过（正常），要么上面记了失败；保底标签页都没必要留着。
           if (isFallbackTab) window.close()
           return
         }

@@ -7,6 +7,7 @@ import {
   handleMediaFetch,
   handleMediaHead,
   handleMweiboFetch,
+  isPastFallbackHour,
   maxBackgroundMediaBytes,
 } from '@/entrypoints/background'
 
@@ -344,5 +345,18 @@ describe('m.weibo fetch responses', () => {
       status: 403,
       contentType: 'application/json',
     })
+  })
+})
+
+describe('签到保底的补触发闸门', () => {
+  it('保底时间之前不放行（闹钟被补触发到第二天早上时挡住）', () => {
+    expect(isPastFallbackHour(new Date(2026, 9, 12, 9, 57))).toBe(false)
+    expect(isPastFallbackHour(new Date(2026, 9, 12, 0, 0))).toBe(false)
+    expect(isPastFallbackHour(new Date(2026, 9, 12, 19, 59))).toBe(false)
+  })
+
+  it('到点及之后放行', () => {
+    expect(isPastFallbackHour(new Date(2026, 9, 12, 20, 0))).toBe(true)
+    expect(isPastFallbackHour(new Date(2026, 9, 12, 23, 59))).toBe(true)
   })
 })

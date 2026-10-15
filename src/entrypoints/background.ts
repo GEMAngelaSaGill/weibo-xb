@@ -486,12 +486,26 @@ async function ensureFallbackCheckinAlarm(): Promise<void> {
 }
 
 /**
+ * 保底时间是否已过（按当天本地时间算）。
+ *
+ * 闹钟在「浏览器关着」时会被 Chromium 记账，等到下次启动补触发——那可能是
+ * 第二天早上。所以补触发时必须再核一次时间，否则保底会把当天的签到提前做掉。
+ */
+export function isPastFallbackHour(date: Date = new Date()): boolean {
+  return date.getHours() >= FALLBACK_CHECKIN_HOUR
+}
+
+/**
  * 20 点保底：当天还没签就补一次。
  *
  * IO 走的是页面桥接，后台自己发不了请求，所以得有一个 weibo.com 标签页在跑——
  * 没有就临时开一个后台标签页，签完自己关掉（查询参数就是给那边的信号）。
  */
 async function runFallbackCheckin(): Promise<void> {
+  // 没到保底时间就什么都不做。补触发的闹钟会走到这里被挡住——
+  // 保底的本意是「到点还没签才补」，不该在早上把当天的签到提前用掉。
+  if (!isPastFallbackHour()) return
+
   if (!(await claimAutoCheckin('auto-fallback'))) return
 
   try {
