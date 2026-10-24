@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
 import { appendCheckinLog, type CheckinTrigger } from '@/lib/weibo/checkin/checkin-log'
-import { runSuperTopicCheckin } from '@/lib/weibo/checkin/checkin-runner'
+import { runSuperTopicCheckinWithRetry } from '@/lib/weibo/checkin/checkin-runner'
 
 /** 保底唤醒时后台会用这个查询参数打开一个临时标签页，签完自己关掉。 */
 const FALLBACK_TAB_PARAM = 'xb_checkin'
@@ -21,7 +21,7 @@ async function executeCheckin(trigger: CheckinTrigger, closeTabWhenDone: boolean
   const toastId = toast('开始自动签到超话…', { duration: AUTO_TOAST_DURATION })
 
   try {
-    const summary = await runSuperTopicCheckin()
+    const summary = await runSuperTopicCheckinWithRetry()
     await appendCheckinLog({ at: Date.now(), trigger, ...summary })
 
     const text = `自动签到完成：成功 ${summary.signed} 个，已签 ${summary.already} 个${

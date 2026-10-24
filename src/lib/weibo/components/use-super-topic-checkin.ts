@@ -1,7 +1,11 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
-import { appendCheckinLog } from '@/lib/weibo/checkin/checkin-log'
+import {
+  appendCheckinLog,
+  localDateString,
+  saveAutoCheckinState,
+} from '@/lib/weibo/checkin/checkin-log'
 import { runSuperTopicCheckin } from '@/lib/weibo/checkin/checkin-runner'
 
 export interface SuperTopicCheckinState {
@@ -27,6 +31,17 @@ export function useSuperTopicCheckin(onFinished?: () => void): SuperTopicCheckin
       })
 
       await appendCheckinLog({ at: Date.now(), trigger: 'manual', ...summary })
+
+      // 手动签完也要写「今天已签」的标记，否则下次打开微博还会自动再跑一轮
+      // （10-15 那天就是手动签完之后 16:58 又跑了一次，白费一轮请求）。
+      if (summary.total > 0) {
+        await saveAutoCheckinState({
+          date: localDateString(),
+          startedAt: Date.now(),
+          trigger: 'manual',
+          status: 'done',
+        })
+      }
 
       if (summary.total === 0) {
         toast.warning('没有关注的超话', { id: toastId })

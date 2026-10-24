@@ -501,7 +501,7 @@ export function isPastFallbackHour(date: Date = new Date()): boolean {
  * IO 走的是页面桥接，后台自己发不了请求，所以得有一个 weibo.com 标签页在跑——
  * 没有就临时开一个后台标签页，签完自己关掉（查询参数就是给那边的信号）。
  */
-async function runFallbackCheckin(): Promise<void> {
+export async function runFallbackCheckin(): Promise<void> {
   // 没到保底时间就什么都不做。补触发的闹钟会走到这里被挡住——
   // 保底的本意是「到点还没签才补」，不该在早上把当天的签到提前用掉。
   if (!isPastFallbackHour()) return
@@ -509,10 +509,24 @@ async function runFallbackCheckin(): Promise<void> {
   if (!(await claimAutoCheckin('auto-fallback'))) return
 
   try {
-    const [existing] = await browser.tabs.query({ url: 'https://weibo.com/*' })
-    if (existing?.id !== undefined) {
-      await browser.tabs.sendMessage(existing.id, { type: 'checkin-run' })
-      return
+    const tabs = await browser.tabs.query({ url: 'https://weibo.com/*' })
+
+    // 优先挑没被浏览器休眠的标签页。扩展重载过的旧标签页里 content script 会变成
+    // 孤儿，发消息报 "Receiving end does not exist"——这种情况要继续试下一个，
+    // 全都试不通再开新标签页，而不是直接放弃（10-24 那次就是这么失败的）。
+    const ordered = [...tabs].sort(
+      (a, b) => Number(Boolean(a.discarded)) - Number(Boolean(b.discarded)),
+    )
+
+    for (const tab of ordered) {
+      if (tab.id === undefined) continue
+
+      try {
+        await browser.tabs.sendMessage(tab.id, { type: 'checkin-run' })
+        return
+      } catch {
+        // 这个标签页没有活的 content script，换下一个。
+      }
     }
 
     await browser.tabs.create({ url: 'https://weibo.com/?xb_checkin=auto', active: false })

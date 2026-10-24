@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAutoSuperTopicCheckin } from '@/lib/weibo/checkin/use-auto-super-topic-checkin'
 
-const { appendCheckinLog, runSuperTopicCheckin, sendMessage } = vi.hoisted(() => ({
+const { appendCheckinLog, runSuperTopicCheckinWithRetry, sendMessage } = vi.hoisted(() => ({
   appendCheckinLog: vi.fn<(entry: unknown) => Promise<void>>(async () => {}),
-  runSuperTopicCheckin: vi.fn(),
+  runSuperTopicCheckinWithRetry: vi.fn(),
   sendMessage: vi.fn(),
 }))
 
 vi.mock('@/lib/weibo/checkin/checkin-log', () => ({ appendCheckinLog }))
-vi.mock('@/lib/weibo/checkin/checkin-runner', () => ({ runSuperTopicCheckin }))
+vi.mock('@/lib/weibo/checkin/checkin-runner', () => ({ runSuperTopicCheckinWithRetry }))
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), {
     success: vi.fn(),
@@ -38,11 +38,11 @@ describe('useAutoSuperTopicCheckin', () => {
 
   it('拿到许可就跑签到', async () => {
     sendMessage.mockResolvedValueOnce({ granted: true })
-    runSuperTopicCheckin.mockResolvedValueOnce(summary)
+    runSuperTopicCheckinWithRetry.mockResolvedValueOnce(summary)
 
     renderHook(() => useAutoSuperTopicCheckin())
 
-    await waitFor(() => expect(runSuperTopicCheckin).toHaveBeenCalled())
+    await waitFor(() => expect(runSuperTopicCheckinWithRetry).toHaveBeenCalled())
     expect(appendCheckinLog).toHaveBeenCalledWith(
       expect.objectContaining({ trigger: 'auto-open', signed: 1 }),
     )
@@ -55,7 +55,7 @@ describe('useAutoSuperTopicCheckin', () => {
     await waitFor(() => expect(sendMessage).toHaveBeenCalled())
 
     await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(runSuperTopicCheckin).not.toHaveBeenCalled()
+    expect(runSuperTopicCheckinWithRetry).not.toHaveBeenCalled()
     expect(appendCheckinLog).not.toHaveBeenCalled()
   })
 
@@ -70,7 +70,7 @@ describe('useAutoSuperTopicCheckin', () => {
       total: 0,
       error: expect.stringContaining('Could not establish connection'),
     })
-    expect(runSuperTopicCheckin).not.toHaveBeenCalled()
+    expect(runSuperTopicCheckinWithRetry).not.toHaveBeenCalled()
   })
 
   it('后台没回结果时同样记日志', async () => {

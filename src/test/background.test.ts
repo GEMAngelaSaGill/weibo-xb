@@ -360,3 +360,107 @@ describe('签到保底的补触发闸门', () => {
     expect(isPastFallbackHour(new Date(2026, 9, 12, 23, 59))).toBe(true)
   })
 })
+
+describe('保底签到的标签页处理', () => {
+  function installBrowser() {
+    const tabs = {
+      query: vi.fn(async () => [] as Array<{ id?: number; discarded?: boolean }>),
+      sendMessage: vi.fn(async () => undefined),
+      create: vi.fn(async () => ({ id: 99 })),
+    }
+    Object.defineProperty(globalThis, 'browser', {
+      configurable: true,
+      value: {
+        storage: {
+          local: {
+            get: vi.fn(async () => ({})),
+            set: vi.fn(async () => {}),
+          },
+        },
+        alarms: {
+          get: vi.fn(async () => undefined),
+          create: vi.fn(async () => {}),
+          onAlarm: { addListener: vi.fn() },
+        },
+        tabs,
+      },
+    })
+    return tabs
+  }
+
+  /**
+   * 每次重新加载模块：`claimAutoCheckin` 用一个模块级变量做串行锁，
+   * 同一个模块实例里第二次调用一定会被拒，不重置就没法逐个测。
+   */
+  async function loadRunFallbackCheckin() {
+    vi.resetModules()
+    const mod = await import('@/entrypoints/background')
+    return mod.runFallbackCheckin
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  function setHour(hour: number, minute = 0) {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 9, 24, hour, minute))
+  }
+
+  it('现有标签页没响应时退回开新标签页', async () => {
+    setHour(20, 46)
+    const tabs = installBrowser()
+    tabs.query.mockResolvedValue([{ id: 7, discarded: false }])
+    tabs.sendMessage.mockRejectedValue(
+      new Error('Could not establish connection. Receiving end does not exist.'),
+    )
+
+    const runFallbackCheckin = await loadRunFallbackCheckin()
+    await runFallbackCheckin()
+
+    expect(tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'checkin-run' })
+    expect(tabs.create).toHaveBeenCalledWith({
+      url: 'https://weibo.com/?xb_checkin=auto',
+      active: false,
+    })
+  })
+
+  it('标签页能收到消息时不再开新标签页', async () => {
+    setHour(20, 46)
+    const tabs = installBrowser()
+    tabs.query.mockResolvedValue([{ id: 7, discarded: false }])
+
+    const runFallbackCheckin = await loadRunFallbackCheckin()
+    await runFallbackCheckin()
+
+    expect(tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'checkin-run' })
+    expect(tabs.create).not.toHaveBeenCalled()
+  })
+
+  it('优先用没被浏览器休眠的标签页', async () => {
+    setHour(20, 46)
+    const tabs = installBrowser()
+    tabs.query.mockResolvedValue([
+      { id: 1, discarded: true },
+      { id: 2, discarded: false },
+    ])
+
+    const runFallbackCheckin = await loadRunFallbackCheckin()
+    await runFallbackCheckin()
+
+    expect(tabs.sendMessage).toHaveBeenCalledWith(2, { type: 'checkin-run' })
+    expect(tabs.sendMessage).not.toHaveBeenCalledWith(1, expect.anything())
+  })
+
+  it('没到保底时间就什么都不做', async () => {
+    setHour(9, 57)
+    const tabs = installBrowser()
+    tabs.query.mockResolvedValue([{ id: 7 }])
+
+    const runFallbackCheckin = await loadRunFallbackCheckin()
+    await runFallbackCheckin()
+
+    expect(tabs.query).not.toHaveBeenCalled()
+    expect(tabs.create).not.toHaveBeenCalled()
+  })
+})
