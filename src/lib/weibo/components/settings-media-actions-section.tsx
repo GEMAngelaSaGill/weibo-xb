@@ -41,6 +41,7 @@ import {
   type FeedInteractionMode,
   type FeedPrimaryActionId,
   type FeedToolbarButtonId,
+  type PhotoViewMode,
   type WeiboCardMediaCollapseType,
   type WeiboCardMultiMediaGridLimit,
   type WeiboCardMultiMediaLayout,
@@ -66,6 +67,7 @@ const MEDIA_SETTING_KEYS = [
   'weiboCardMultiMediaGridLimit',
   'weiboCardMultiMediaGridMaxWidth',
   'weiboCardMultiMediaStripHeight',
+  'photoViewMode',
   'rememberPlaybackRate',
   'playbackRate',
 ] as const satisfies readonly (keyof AppSettings)[]
@@ -188,6 +190,21 @@ export function SettingsMediaSection({
               weiboCardMultiMediaLayout: value as WeiboCardMultiMediaLayout,
             })
           }
+        />
+      </Field>
+
+      <Field
+        label="图片查看方式"
+        description="微博预览先给中等尺寸的图（信息流里已经缓存过），要看全尺寸再点「查看原图」，打开更快"
+      >
+        <OptionPills
+          label="图片查看方式"
+          value={settings.photoViewMode}
+          options={[
+            { value: 'weibo-preview', label: '微博预览' },
+            { value: 'original', label: '直接原图' },
+          ]}
+          onChange={(value) => void updateSettings({ photoViewMode: value as PhotoViewMode })}
         />
       </Field>
 

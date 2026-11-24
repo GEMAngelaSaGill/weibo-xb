@@ -167,6 +167,10 @@ describe('SettingsDialog', () => {
     await user.click(screen.getByRole('button', { name: '媒体' }))
     expect(screen.queryByRole('slider', { name: '单图最大宽度' })).not.toBeInTheDocument()
 
+    expect(screen.getByText('图片查看方式')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '直接原图' }))
+    expect(mockUpdateSettings).toHaveBeenCalledWith({ photoViewMode: 'original' })
+
     await user.click(screen.getByRole('button', { name: '精细调整' }))
     expect(screen.getByRole('slider', { name: '单图最大宽度' })).toHaveValue(450)
     expect(screen.getByRole('slider', { name: '单视频最大宽度' })).toHaveValue(650)

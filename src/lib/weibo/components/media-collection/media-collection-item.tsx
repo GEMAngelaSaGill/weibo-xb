@@ -8,6 +8,7 @@ import type { PhotoRenderParams } from 'react-photo-view/dist/types'
 import { AspectRatio } from '@/components/ui/aspect-ratio'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import type { PhotoViewMode } from '@/lib/app-settings'
 import { cn } from '@/lib/utils'
 import type { FeedImage } from '@/lib/weibo/models/feed'
 
@@ -151,7 +152,38 @@ function LivePhotoPreview({ image, params }: { image: FeedImage; params: PhotoRe
   )
 }
 
-function ImagePhotoView({ image, children }: { image: FeedImage; children: ReactElement }) {
+/** 微博原生预览的「查看原图」入口：先看预览图，想看全尺寸再点一下。 */
+function OriginalImageButton({ onRequestOriginal }: { onRequestOriginal: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="pointer-events-auto border-white/20 bg-black/55 font-mono text-white backdrop-blur hover:bg-black/70 hover:text-white"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRequestOriginal()
+        }}
+      >
+        查看原图
+      </Button>
+    </div>
+  )
+}
+
+function ImagePhotoView({
+  image,
+  photoViewMode,
+  children,
+}: {
+  image: FeedImage
+  photoViewMode: PhotoViewMode
+  children: ReactElement
+}) {
+  // 这张图已经按过「查看原图」；预览模式下不回退，切到原图模式则直接看原图。
+  const [originalRequested, setOriginalRequested] = useState(false)
+
   if (image.type === 'livephoto' && image.livePhotoVideoUrl) {
     return (
       <PhotoView
@@ -164,11 +196,28 @@ function ImagePhotoView({ image, children }: { image: FeedImage; children: React
     )
   }
 
-  return <PhotoView src={image.largeUrl}>{children}</PhotoView>
+  const canLoadOriginal = image.largeUrl !== image.thumbnailUrl
+  const showOriginal = !canLoadOriginal || photoViewMode === 'original' || originalRequested
+  // 预览模式给的是信息流里已经缓存过的中等尺寸图，原图要等用户点了才请求。
+  const src = showOriginal ? image.largeUrl : image.thumbnailUrl
+
+  return (
+    <PhotoView
+      src={src}
+      overlay={
+        canLoadOriginal && !showOriginal ? (
+          <OriginalImageButton onRequestOriginal={() => setOriginalRequested(true)} />
+        ) : undefined
+      }
+    >
+      {children}
+    </PhotoView>
+  )
 }
 
 export function MediaCollectionItemView({
   item,
+  photoViewMode,
   ratio,
   roundedClassName,
   horizontal,
@@ -178,6 +227,7 @@ export function MediaCollectionItemView({
   onActivate,
 }: {
   item: MediaCollectionItem
+  photoViewMode: PhotoViewMode
   ratio: number
   roundedClassName: string
   horizontal: boolean
@@ -203,7 +253,7 @@ export function MediaCollectionItemView({
     )
 
     return (
-      <ImagePhotoView image={item.image}>
+      <ImagePhotoView image={item.image} photoViewMode={photoViewMode}>
         {horizontal ? (
           <motion.div
             data-testid="media-strip-pressable"

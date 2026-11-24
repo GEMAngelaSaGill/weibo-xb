@@ -175,6 +175,7 @@ describe('app-settings', () => {
       weiboCardMultiMediaGridLimit: 9,
       weiboCardMultiMediaGridMaxWidth: 650,
       weiboCardMultiMediaStripHeight: 360,
+      photoViewMode: 'weibo-preview',
       commentDensity: 'standard',
       commentCardShowAvatar: true,
       commentCardShowTimestamp: true,
@@ -254,6 +255,7 @@ describe('app-settings', () => {
         weiboCardMultiMediaGridLimit: 12,
         weiboCardMultiMediaGridMaxWidth: 800,
         weiboCardMultiMediaStripHeight: 480,
+        photoViewMode: 'weibo-preview',
         commentDensity: 'relaxed',
         commentCardShowAvatar: false,
         commentCardShowTimestamp: true,
@@ -336,6 +338,7 @@ describe('app-settings', () => {
       weiboCardMultiMediaGridLimit: 12,
       weiboCardMultiMediaGridMaxWidth: 800,
       weiboCardMultiMediaStripHeight: 480,
+      photoViewMode: 'weibo-preview',
       commentDensity: 'relaxed',
       commentCardShowAvatar: false,
       commentCardShowTimestamp: true,
@@ -457,6 +460,13 @@ describe('app-settings', () => {
     expect(
       normalizeAppSettings({ weiboCardMultiMediaStripHeight: 100 }).weiboCardMultiMediaStripHeight,
     ).toBe(200)
+    expect(normalizeAppSettings({ photoViewMode: 'original' }).photoViewMode).toBe('original')
+    expect(normalizeAppSettings({ photoViewMode: 'weibo-preview' }).photoViewMode).toBe(
+      'weibo-preview',
+    )
+    expect(normalizeAppSettings({ photoViewMode: 'unknown' as never }).photoViewMode).toBe(
+      'weibo-preview',
+    )
     expect(
       normalizeAppSettings({ commentCardImageDisplay: 'invalid' as never }).commentCardImageDisplay,
     ).toBe('expanded')

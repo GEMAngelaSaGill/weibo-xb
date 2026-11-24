@@ -69,6 +69,7 @@ export const MediaCollection = memo(function MediaCollection({
   const container = useMemo(() => getUiPortalContainer(), [])
   const darkModeImageDim = useAppSettings((s) => s.darkModeImageDim)
   const photoLoopEnabled = useAppSettings((s) => s.photoLoopEnabled)
+  const photoViewMode = useAppSettings((s) => s.photoViewMode)
   const defaultSingleImageMaxWidth = useAppSettings((s) => s.weiboCardSingleImageMaxWidth)
   const cardLayout = useAppSettings((s) => s.weiboCardMultiMediaLayout)
   const cardGridLimit = useAppSettings((s) => s.weiboCardMultiMediaGridLimit)
@@ -102,6 +103,8 @@ export const MediaCollection = memo(function MediaCollection({
           if (visible) onOpen?.()
         }}
         toolbarRender={(overlayProps) => <PhotoToolbar overlayProps={overlayProps} />}
+        // 每张图的「查看原图」按钮是各 PhotoView 自己给的 overlay，这里只负责转交
+        overlayRender={(overlayProps) => overlayProps.overlay ?? null}
       >
         <div
           role={horizontal ? 'region' : undefined}
@@ -162,6 +165,7 @@ export const MediaCollection = memo(function MediaCollection({
                 >
                   <MediaCollectionItemView
                     item={item}
+                    photoViewMode={photoViewMode}
                     ratio={ratio}
                     roundedClassName={items.length === 1 ? 'rounded-xl' : 'rounded-lg'}
                     horizontal={horizontal}

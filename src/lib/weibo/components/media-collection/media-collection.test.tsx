@@ -123,10 +123,12 @@ vi.mock('react-photo-view', () => ({
   PhotoView: ({
     children,
     src,
+    overlay,
     render: renderPhoto,
   }: {
     children: ReactNode
     src?: string
+    overlay?: ReactNode
     render?: (params: {
       attrs: {
         style: Record<string, never>
@@ -140,6 +142,7 @@ vi.mock('react-photo-view', () => ({
       onClick={photoViewClickSpy}
     >
       {children}
+      {overlay}
       {renderPhoto
         ? renderPhoto({
             attrs: {
@@ -197,9 +200,60 @@ describe('MediaCollection', () => {
     expect(screen.getByText('长图')).toBeInTheDocument()
     expect(screen.getByTestId('photo-view')).toHaveAttribute(
       'data-src',
-      'https://example.com/large.jpg',
+      'https://example.com/thumb.jpg',
     )
     expect(screen.queryByTestId('photo-render')).not.toBeInTheDocument()
+  })
+
+  it('opens the original image directly when the setting asks for it', () => {
+    getAppSettingsStore().setState({ photoViewMode: 'original' })
+
+    render(<MediaCollection items={createItems(1)} />)
+
+    expect(screen.getByTestId('photo-view')).toHaveAttribute(
+      'data-src',
+      'https://example.com/large-1.jpg',
+    )
+    expect(screen.queryByRole('button', { name: '查看原图' })).not.toBeInTheDocument()
+  })
+
+  it('shows the preview first and swaps to the original when 查看原图 is clicked', () => {
+    render(<MediaCollection items={createItems(1)} />)
+
+    expect(screen.getByTestId('photo-view')).toHaveAttribute(
+      'data-src',
+      'https://example.com/thumb-1.jpg',
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '查看原图' }))
+
+    expect(screen.getByTestId('photo-view')).toHaveAttribute(
+      'data-src',
+      'https://example.com/large-1.jpg',
+    )
+    expect(screen.queryByRole('button', { name: '查看原图' })).not.toBeInTheDocument()
+  })
+
+  it('hides 查看原图 when the preview already is the full image', () => {
+    render(
+      <MediaCollection
+        items={buildMediaCollectionItems([
+          {
+            id: 'same-pic',
+            thumbnailUrl: 'https://example.com/same.jpg',
+            largeUrl: 'https://example.com/same.jpg',
+            width: 800,
+            height: 600,
+          },
+        ])}
+      />,
+    )
+
+    expect(screen.getByTestId('photo-view')).toHaveAttribute(
+      'data-src',
+      'https://example.com/same.jpg',
+    )
+    expect(screen.queryByRole('button', { name: '查看原图' })).not.toBeInTheDocument()
   })
 
   it('uses the configured single image maximum width for inline media', () => {

@@ -155,6 +155,15 @@ export type WeiboCardMediaCollapseType = (typeof WEIBO_CARD_MEDIA_COLLAPSE_TYPES
 
 export type WeiboCardMultiMediaLayout = 'grid' | 'horizontal'
 
+/**
+ * 点开图片时的加载策略。
+ *
+ * - `weibo-preview`：微博原生的做法，先给中等尺寸的预览图（信息流里已经缓存过），
+ *   想看全尺寸再点「查看原图」。打开快，代价是首屏略糊。
+ * - `original`：直接拉原图，清晰但大图要等。
+ */
+export type PhotoViewMode = 'weibo-preview' | 'original'
+
 export const WEIBO_CARD_MULTI_MEDIA_GRID_LIMIT_OPTIONS = [4, 6, 9, 12, 16] as const
 
 export type WeiboCardMultiMediaGridLimit =
@@ -217,6 +226,7 @@ export interface AppSettings {
   weiboCardMultiMediaGridLimit: WeiboCardMultiMediaGridLimit
   weiboCardMultiMediaGridMaxWidth: number
   weiboCardMultiMediaStripHeight: number
+  photoViewMode: PhotoViewMode
   commentDensity: ContentDensity
   commentCardShowAvatar: boolean
   commentCardShowTimestamp: boolean
@@ -317,6 +327,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   weiboCardMultiMediaGridLimit: 9,
   weiboCardMultiMediaGridMaxWidth: DEFAULT_WEIBO_CARD_MULTI_MEDIA_GRID_MAX_WIDTH,
   weiboCardMultiMediaStripHeight: DEFAULT_WEIBO_CARD_MULTI_MEDIA_STRIP_HEIGHT,
+  photoViewMode: 'weibo-preview' as PhotoViewMode,
   commentDensity: 'standard',
   commentCardShowAvatar: true,
   commentCardShowTimestamp: true,
@@ -479,6 +490,10 @@ function isReplyChainDisplay(value: unknown): value is ReplyChainDisplay {
 
 function isWeiboCardMultiMediaLayout(value: unknown): value is WeiboCardMultiMediaLayout {
   return value === 'grid' || value === 'horizontal'
+}
+
+function isPhotoViewMode(value: unknown): value is PhotoViewMode {
+  return value === 'weibo-preview' || value === 'original'
 }
 
 function isWeiboCardMultiMediaGridLimit(value: unknown): value is WeiboCardMultiMediaGridLimit {
@@ -833,6 +848,9 @@ export function normalizeAppSettings(value: unknown): AppSettings {
       WEIBO_CARD_MULTI_MEDIA_STRIP_HEIGHT_STEP,
       DEFAULT_APP_SETTINGS.weiboCardMultiMediaStripHeight,
     ),
+    photoViewMode: isPhotoViewMode(candidate.photoViewMode)
+      ? candidate.photoViewMode
+      : DEFAULT_APP_SETTINGS.photoViewMode,
     commentDensity: isContentDensity(candidate.commentDensity)
       ? candidate.commentDensity
       : DEFAULT_APP_SETTINGS.commentDensity,
