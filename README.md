@@ -68,13 +68,13 @@ xb 是一个浏览器插件。安装后，正常浏览微博，就能享受到�
 2. **每天 20:00 保底**——当天一直没签才补一次；没有打开的微博标签页就临时开一个后台标签页，
    签完自己关掉（查询参数 `?xb_checkin=auto` 就是给那边的信号）
 
-判定「今天签过没有」的做法是**先写标记、再开工**：
+判定「今天签过没有」的做法是**由真正执行的微博页面领取资格，再发请求**：
 
-- `chrome.storage` 里的**日期标记**跨 SW 重启、跨浏览器重启去重
-- Service Worker 里的**内存标志**串行化同一时刻的并发（多标签页同时打开）
+- `chrome.storage` 里的**日期和状态标记**跨 SW 重启、跨浏览器重启去重
+- Service Worker 里的**短时内存锁**串行化同一时刻的领取（多标签页同时打开）
 
-两处标记都在发请求**之前**落盘——宁可漏签，不可重发。另外**不做**「失败就定时重试直到成功」的循环，
-那才是真正会触发风控的模式。正常量是 17 个超话 × 1 次 / 天，跟手动点一次一键签到完全一样。
+保底调度不会预先占用标记；页面签到全部成功后才标记完成。如果执行中断或失败，至少一小时后才允许再领，
+且每天最多自动尝试两次；不会定时循环重试。浏览器在 20:00 后启动时，也会检查当天是否需要补签。
 
 > [!IMPORTANT]
 > **闹钟被「补触发」时要挡住。** 保底时刻浏览器关着的话，Chromium 会把这个闹钟记账，
@@ -123,6 +123,19 @@ xb 是一个浏览器插件。安装后，正常浏览微博，就能享受到�
 > 建不了子文件夹**；另外浏览器会拦截「一个手势触发多个下载」，需要在
 > `edge://settings/content/automaticDownloads`（Chrome 同理）里把 `weibo.com`
 > 加进允许列表，批量下载才能一次全下来。
+
+### 图片查看方式（改了默认行为）
+
+点开图片不再直接拉原图。原图动辄 2000px 宽、几百 KB，而信息流里显示的是 690px 的中等尺寸图，
+本来就躺在浏览器缓存里——先给这张，几乎秒开。
+
+设置 → 媒体 → 「图片查看方式」：
+
+- **微博预览**（默认）：先显示中等尺寸图，底部给一个「查看原图」，要看全尺寸再点
+- **直接原图**：旧行为，点开就加载原图
+
+只影响图片灯箱（信息流、评论、详情页都走 `MediaCollection` → `PhotoProvider`）；
+Live Photo 和视频不走这条路。
 
 ### 帖子菜单接回原站的操作（上游没有）
 
@@ -217,14 +230,23 @@ bun run build:edge    # 产物在 .output/edge-mv3
 
 ## 致谢
 
-本分支的全部基础工作来自原项目，感谢原作者 [nnecec](https://github.com/nnecec) 与贡献者：
+本分支的全部基础工作来自原项目，感谢原作者 [nnecec](https://github.com/nnecec) 与贡献者。
+另受 [BewlyBewly](https://github.com/BewlyBewly/BewlyBewly) 和
+[BewlyCat](https://github.com/keleus/BewlyCat) 启发；[Linux Do](https://linux.do/) 是友好的中文社区。
 
-- **[nnecec/xb](https://github.com/nnecec/xb)** — 上游项目，GPL-3.0
-- 受 [BewlyBewly](https://github.com/BewlyBewly/BewlyBewly) 和
-  [BewlyCat](https://github.com/keleus/BewlyCat) 启发
-- [Linux Do](https://linux.do/) 友好的中文社区
+## 参考代码仓库
 
-一键签到的接口用法参考了 [Mokelichen/weibo-auto-sign](https://github.com/Mokelichen/weibo-auto-sign)。
+本项目的起点和部分接口用法参考了这些开源项目：
+
+- **[nnecec/xb](https://github.com/nnecec/xb)** — 上游骨架（WXT + React + shadow root 接管、
+  数据层、路由、生图、播放器等），GPL-3.0
+- **[tiansh/yaofang（药方 YAWF）](https://github.com/tiansh/yaofang)** — 微博内容过滤的参考模型
+  （关键字 / 作者 / 来源 → 隐藏 / 折叠 / 高亮）；本项目只取了「关键词 → 隐藏」一档
+- **[Mokelichen/weibo-auto-sign](https://github.com/Mokelichen/weibo-auto-sign)** — 超话签到接口的参考实现
+
+> [!NOTE]
+> 评分功能默认请求上游作者的服务器 `xb-server.nnecec-3d5.workers.dev`（评分默认关闭）。
+> 不想依赖它可以构建时用 `XB_SERVER_URL` 指向自己的服务，或者在设置里关掉评分。
 
 ## 许可证
 

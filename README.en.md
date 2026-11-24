@@ -96,15 +96,26 @@ For the official build, see the upstream project: [nnecec/xb](https://github.com
 ## Credits
 
 All of the groundwork comes from the upstream project — thanks to
-[nnecec](https://github.com/nnecec) and its contributors:
+[nnecec](https://github.com/nnecec) and its contributors. Also inspired by
+[BewlyBewly](https://github.com/BewlyBewly/BewlyBewly) and
+[BewlyCat](https://github.com/keleus/BewlyCat); [Linux Do](https://linux.do/) is a friendly community.
 
-- **[nnecec/xb](https://github.com/nnecec/xb)** — upstream project, GPL-3.0
-- Inspired by [BewlyBewly](https://github.com/BewlyBewly/BewlyBewly) and
-  [BewlyCat](https://github.com/keleus/BewlyCat)
-- [Linux Do](https://linux.do/) a friendly community
+## Reference repositories
 
-The one-click sign-in API usage was informed by
-[Mokelichen/weibo-auto-sign](https://github.com/Mokelichen/weibo-auto-sign).
+This project started from, and borrowed API details from, the following open-source projects:
+
+- **[nnecec/xb](https://github.com/nnecec/xb)** — upstream skeleton (WXT + React + shadow-root
+  takeover, data layer, routing, image generation, media player), GPL-3.0
+- **[tiansh/yaofang](https://github.com/tiansh/yaofang)** — reference model for Weibo content
+  filtering (keyword / author / source → hide / collapse / highlight); this fork only implements
+  the "keyword → hide" part
+- **[Mokelichen/weibo-auto-sign](https://github.com/Mokelichen/weibo-auto-sign)** — reference
+  implementation of the super-topic check-in API
+
+> [!NOTE]
+> The rating feature talks to the upstream author's server
+> `xb-server.nnecec-3d5.workers.dev` by default (rating is off unless enabled). To avoid relying
+> on it, point `XB_SERVER_URL` at your own service at build time, or keep rating disabled.
 
 ## License
 
