@@ -46,7 +46,7 @@
 
 ---
 
-![preview](./assets/xb_1.9.0.webp)
+![preview](./assets/xb-preview.webp)
 
 xb strips away the noise and gives you a focused, distraction-free reading
 experience — similar to X.

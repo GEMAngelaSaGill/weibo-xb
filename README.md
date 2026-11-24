@@ -34,7 +34,7 @@
 
 ---
 
-![preview](./assets/xb_1.9.0.webp)
+![preview](./assets/xb-preview.webp)
 
 xb 旨在浏览微博时去除噪音，打造一个专注、无干扰的阅读体验——就像 X 那样清爽。
 
