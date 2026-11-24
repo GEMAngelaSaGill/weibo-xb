@@ -33,6 +33,8 @@ export interface AutoCheckinState {
   trigger: CheckinTrigger
   /** 已领取但还没跑的标记，用来挡住并发 */
   status: 'running' | 'done'
+  /** 当天自动领取次数，用来限制失败后的重试 */
+  attempts?: number
 }
 
 export const AUTO_CHECKIN_STATE_KEY = 'xb:super-topic-auto-checkin'
@@ -84,6 +86,7 @@ export async function loadAutoCheckinState(): Promise<AutoCheckinState | null> {
           startedAt: state.startedAt,
           trigger: state.trigger ?? 'auto-open',
           status: state.status === 'done' ? 'done' : 'running',
+          attempts: typeof state.attempts === 'number' ? state.attempts : undefined,
         }
       : null
   } catch {

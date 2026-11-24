@@ -11,7 +11,7 @@ import type { MweiboFetchResponse } from '@/lib/weibo/platform/messages'
 
 export default defineBackground(() => {
   void ensureMediaRequestHeaderRules()
-  void ensureFallbackCheckinAlarm()
+  void startFallbackCheckinScheduler()
 
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'mweibo-fetch') {
@@ -435,41 +435,68 @@ export async function handleMediaFetch(
 //
 // 两个触发点：
 //   1. 打开 weibo.com 时内容脚本问一句（主力）
-//   2. 每天 22:00 的 alarms 保底（当天一直没签才跑）
-// 判定「今天签过没有」的标记**在开工之前**就落盘，宁可漏签不可重发。
+//   2. 每天 20:00 的 alarms 保底（当天一直没签才跑）
+// 页面领取后才落盘；失败后至少间隔一小时，当天最多自动尝试两次。
 
 const FALLBACK_CHECKIN_ALARM = 'xb-super-topic-checkin-fallback'
 const FALLBACK_CHECKIN_HOUR = 20
+const AUTO_CHECKIN_LEASE_MS = 60 * 60 * 1000
+const MAX_AUTO_CHECKIN_ATTEMPTS = 2
 
-/** 单个 SW 生命周期内的串行锁：storage 的读-改-写挡不住同刻并发，这个能。 */
-let autoCheckinClaimed = false
+/** 单个 SW 生命周期内的锁，防止多个页面同时读到尚未领取的状态。 */
+let autoCheckinClaimInFlight = false
+let fallbackDispatchInFlight = false
+
+function isAutoCheckinClaimedToday(
+  state: Awaited<ReturnType<typeof loadAutoCheckinState>>,
+  today: string,
+  now: number,
+): boolean {
+  if (state?.date !== today) return false
+  return (
+    state.status === 'done' ||
+    (state.attempts ?? 1) >= MAX_AUTO_CHECKIN_ATTEMPTS ||
+    now - state.startedAt < AUTO_CHECKIN_LEASE_MS
+  )
+}
 
 export async function claimAutoCheckin(trigger: CheckinTrigger): Promise<boolean> {
-  if (autoCheckinClaimed) return false
+  if (autoCheckinClaimInFlight) return false
+  autoCheckinClaimInFlight = true
+  try {
+    const now = Date.now()
+    const today = localDateString(new Date(now))
+    const state = await loadAutoCheckinState()
+    if (isAutoCheckinClaimedToday(state, today, now)) return false
 
-  const today = localDateString()
-  const state = await loadAutoCheckinState()
-  if (state?.date === today) return false
-
-  autoCheckinClaimed = true
-  await saveAutoCheckinState({
-    date: today,
-    startedAt: Date.now(),
-    trigger,
-    status: 'running',
-  })
-
-  return true
+    await saveAutoCheckinState({
+      date: today,
+      startedAt: now,
+      trigger,
+      status: 'running',
+      attempts: state?.date === today ? (state.attempts ?? 1) + 1 : 1,
+    })
+    return true
+  } finally {
+    autoCheckinClaimInFlight = false
+  }
 }
 
 /**
- * 注册（或重注册）保底闹钟。
- *
- * 每次都重建而不是「有就跳过」——否则改了保底时间之后，浏览器里那个旧闹钟会一直赖着，
- * 新配置永远不生效。create 同名闹钟本身就是覆盖，重复调用是幂等的。
+ * 注册保底闹钟。已有正确的未来闹钟时保留它，避免重启时覆盖待触发的闹钟。
  */
 async function ensureFallbackCheckinAlarm(): Promise<void> {
   try {
+    const existing = await browser.alarms.get(FALLBACK_CHECKIN_ALARM)
+    if (
+      existing &&
+      existing.scheduledTime > Date.now() &&
+      existing.periodInMinutes === 24 * 60 &&
+      new Date(existing.scheduledTime).getHours() === FALLBACK_CHECKIN_HOUR
+    ) {
+      return
+    }
+
     const next = new Date()
     next.setHours(FALLBACK_CHECKIN_HOUR, 0, 0, 0)
     if (next.getTime() <= Date.now()) {
@@ -483,6 +510,11 @@ async function ensureFallbackCheckinAlarm(): Promise<void> {
   } catch (error) {
     console.warn('注册签到保底闹钟失败', error)
   }
+}
+
+export async function startFallbackCheckinScheduler(): Promise<void> {
+  if (isPastFallbackHour()) await runFallbackCheckin()
+  await ensureFallbackCheckinAlarm()
 }
 
 /**
@@ -505,11 +537,17 @@ export async function runFallbackCheckin(): Promise<void> {
   // 没到保底时间就什么都不做。补触发的闹钟会走到这里被挡住——
   // 保底的本意是「到点还没签才补」，不该在早上把当天的签到提前用掉。
   if (!isPastFallbackHour()) return
-
-  if (!(await claimAutoCheckin('auto-fallback'))) return
+  if (fallbackDispatchInFlight) return
+  fallbackDispatchInFlight = true
 
   try {
-    const tabs = await browser.tabs.query({ url: 'https://weibo.com/*' })
+    const now = Date.now()
+    const state = await loadAutoCheckinState()
+    if (isAutoCheckinClaimedToday(state, localDateString(new Date(now)), now)) return
+
+    const tabs = await browser.tabs.query({
+      url: ['https://weibo.com/*', 'https://www.weibo.com/*'],
+    })
 
     // 优先挑没被浏览器休眠的标签页。扩展重载过的旧标签页里 content script 会变成
     // 孤儿，发消息报 "Receiving end does not exist"——这种情况要继续试下一个，
@@ -522,7 +560,14 @@ export async function runFallbackCheckin(): Promise<void> {
       if (tab.id === undefined) continue
 
       try {
-        await browser.tabs.sendMessage(tab.id, { type: 'checkin-run' })
+        const response = (await browser.tabs.sendMessage(tab.id, { type: 'checkin-run' })) as
+          | { accepted?: boolean }
+          | undefined
+        if (!response?.accepted) {
+          const latest = await loadAutoCheckinState()
+          if (isAutoCheckinClaimedToday(latest, localDateString(), Date.now())) return
+          continue
+        }
         return
       } catch {
         // 这个标签页没有活的 content script，换下一个。
@@ -540,6 +585,8 @@ export async function runFallbackCheckin(): Promise<void> {
       failed: [],
       error: error instanceof Error ? error.message : '保底签到启动失败',
     })
+  } finally {
+    fallbackDispatchInFlight = false
   }
 }
 

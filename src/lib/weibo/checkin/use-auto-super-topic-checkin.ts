@@ -1,7 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
-import { appendCheckinLog, type CheckinTrigger } from '@/lib/weibo/checkin/checkin-log'
+import {
+  appendCheckinLog,
+  localDateString,
+  saveAutoCheckinState,
+  type CheckinTrigger,
+} from '@/lib/weibo/checkin/checkin-log'
 import { runSuperTopicCheckinWithRetry } from '@/lib/weibo/checkin/checkin-runner'
 
 /** 保底唤醒时后台会用这个查询参数打开一个临时标签页，签完自己关掉。 */
@@ -23,6 +28,14 @@ async function executeCheckin(trigger: CheckinTrigger, closeTabWhenDone: boolean
   try {
     const summary = await runSuperTopicCheckinWithRetry()
     await appendCheckinLog({ at: Date.now(), trigger, ...summary })
+    if (summary.total > 0 && summary.failed.length === 0) {
+      await saveAutoCheckinState({
+        date: localDateString(),
+        startedAt: Date.now(),
+        trigger,
+        status: 'done',
+      })
+    }
 
     const text = `自动签到完成：成功 ${summary.signed} 个，已签 ${summary.already} 个${
       summary.failed.length > 0 ? `，失败 ${summary.failed.length} 个` : ''
@@ -92,28 +105,29 @@ export function useAutoSuperTopicCheckin(): void {
     const isFallbackTab =
       new URLSearchParams(window.location.search).get(FALLBACK_TAB_PARAM) === 'auto'
 
+    const requestClaim = async (trigger: CheckinTrigger): Promise<boolean> => {
+      try {
+        const claim = (await runtime.sendMessage({ type: 'checkin-claim', trigger })) as
+          | { granted?: boolean }
+          | undefined
+        if (claim === undefined) {
+          await logClaimFailure(trigger, new Error('后台没有返回结果'))
+          return false
+        }
+        return claim.granted === true
+      } catch (error) {
+        await logClaimFailure(trigger, error)
+        return false
+      }
+    }
+
     if (!startedRef.current) {
       startedRef.current = true
 
       void (async () => {
         const trigger: CheckinTrigger = isFallbackTab ? 'auto-fallback' : 'auto-open'
 
-        let granted = false
-
-        try {
-          const claim = (await runtime.sendMessage({ type: 'checkin-claim', trigger })) as
-            | { granted?: boolean }
-            | undefined
-
-          if (claim === undefined) {
-            // 后台没回结果。以前这里是静默返回的，出了问题日志里什么都看不到。
-            await logClaimFailure(trigger, new Error('后台没有返回结果'))
-          } else {
-            granted = claim.granted === true
-          }
-        } catch (error) {
-          await logClaimFailure(trigger, error)
-        }
+        const granted = await requestClaim(trigger)
 
         if (!granted) {
           // 要么今天已经跑过（正常），要么上面记了失败；保底标签页都没必要留着。
@@ -125,10 +139,19 @@ export function useAutoSuperTopicCheckin(): void {
       })()
     }
 
-    // 后台复用了已打开的标签页时会推这条消息过来；此时后台已经领过标记了，直接跑。
-    const listener = (message: unknown) => {
+    // 后台只负责投递，由收到消息的页面领取当天的签到资格。
+    const listener = (
+      message: unknown,
+      _sender: unknown,
+      sendResponse: (response: { accepted: boolean }) => void,
+    ) => {
       if ((message as { type?: string } | undefined)?.type !== 'checkin-run') return
-      void executeCheckin('auto-fallback', false)
+      void (async () => {
+        const accepted = await requestClaim('auto-fallback')
+        sendResponse({ accepted })
+        if (accepted) await executeCheckin('auto-fallback', false)
+      })()
+      return true
     }
 
     runtime.onMessage.addListener(listener)

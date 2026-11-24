@@ -362,30 +362,39 @@ describe('签到保底的补触发闸门', () => {
 })
 
 describe('保底签到的标签页处理', () => {
-  function installBrowser() {
+  function installBrowser(initialState?: {
+    date: string
+    startedAt: number
+    trigger: 'auto-open' | 'auto-fallback' | 'manual'
+    status: 'running' | 'done'
+    attempts?: number
+  }) {
+    let state = initialState
+    const storage = {
+      get: vi.fn(async () => ({ 'xb:super-topic-auto-checkin': state })),
+      set: vi.fn(async (value: { 'xb:super-topic-auto-checkin'?: typeof state }) => {
+        state = value['xb:super-topic-auto-checkin']
+      }),
+    }
     const tabs = {
       query: vi.fn(async () => [] as Array<{ id?: number; discarded?: boolean }>),
-      sendMessage: vi.fn(async () => undefined),
+      sendMessage: vi.fn(async () => ({ accepted: true })),
       create: vi.fn(async () => ({ id: 99 })),
+    }
+    const alarms = {
+      get: vi.fn(async () => undefined),
+      create: vi.fn(async () => {}),
+      onAlarm: { addListener: vi.fn() },
     }
     Object.defineProperty(globalThis, 'browser', {
       configurable: true,
       value: {
-        storage: {
-          local: {
-            get: vi.fn(async () => ({})),
-            set: vi.fn(async () => {}),
-          },
-        },
-        alarms: {
-          get: vi.fn(async () => undefined),
-          create: vi.fn(async () => {}),
-          onAlarm: { addListener: vi.fn() },
-        },
+        storage: { local: storage },
+        alarms,
         tabs,
       },
     })
-    return tabs
+    return { tabs, storage, alarms }
   }
 
   /**
@@ -409,7 +418,7 @@ describe('保底签到的标签页处理', () => {
 
   it('现有标签页没响应时退回开新标签页', async () => {
     setHour(20, 46)
-    const tabs = installBrowser()
+    const { tabs, storage } = installBrowser()
     tabs.query.mockResolvedValue([{ id: 7, discarded: false }])
     tabs.sendMessage.mockRejectedValue(
       new Error('Could not establish connection. Receiving end does not exist.'),
@@ -423,11 +432,12 @@ describe('保底签到的标签页处理', () => {
       url: 'https://weibo.com/?xb_checkin=auto',
       active: false,
     })
+    expect(storage.set).not.toHaveBeenCalled()
   })
 
   it('标签页能收到消息时不再开新标签页', async () => {
     setHour(20, 46)
-    const tabs = installBrowser()
+    const { tabs } = installBrowser()
     tabs.query.mockResolvedValue([{ id: 7, discarded: false }])
 
     const runFallbackCheckin = await loadRunFallbackCheckin()
@@ -439,7 +449,7 @@ describe('保底签到的标签页处理', () => {
 
   it('优先用没被浏览器休眠的标签页', async () => {
     setHour(20, 46)
-    const tabs = installBrowser()
+    const { tabs } = installBrowser()
     tabs.query.mockResolvedValue([
       { id: 1, discarded: true },
       { id: 2, discarded: false },
@@ -454,7 +464,7 @@ describe('保底签到的标签页处理', () => {
 
   it('没到保底时间就什么都不做', async () => {
     setHour(9, 57)
-    const tabs = installBrowser()
+    const { tabs } = installBrowser()
     tabs.query.mockResolvedValue([{ id: 7 }])
 
     const runFallbackCheckin = await loadRunFallbackCheckin()
@@ -462,5 +472,64 @@ describe('保底签到的标签页处理', () => {
 
     expect(tabs.query).not.toHaveBeenCalled()
     expect(tabs.create).not.toHaveBeenCalled()
+  })
+
+  it('当天进行中的领取未超时则跳过保底投递', async () => {
+    setHour(20, 46)
+    const { tabs } = installBrowser({
+      date: '2026-10-24',
+      startedAt: Date.now() - 60_000,
+      trigger: 'auto-open',
+      status: 'running',
+    })
+    const runFallbackCheckin = await loadRunFallbackCheckin()
+    await runFallbackCheckin()
+    expect(tabs.query).not.toHaveBeenCalled()
+  })
+
+  it('进行中的领取超过一小时后只可重试一次', async () => {
+    setHour(20, 46)
+    const { storage } = installBrowser({
+      date: '2026-10-24',
+      startedAt: Date.now() - 61 * 60_000,
+      trigger: 'auto-open',
+      status: 'running',
+    })
+    vi.resetModules()
+    const { claimAutoCheckin } = await import('@/entrypoints/background')
+    await expect(claimAutoCheckin('auto-fallback')).resolves.toBe(true)
+    expect(storage.set).toHaveBeenCalledWith({
+      'xb:super-topic-auto-checkin': expect.objectContaining({
+        trigger: 'auto-fallback',
+        status: 'running',
+        attempts: 2,
+      }),
+    })
+    await expect(claimAutoCheckin('auto-open')).resolves.toBe(false)
+  })
+
+  it('一小时内不会因刷新重复领取', async () => {
+    setHour(20, 46)
+    const { storage } = installBrowser({
+      date: '2026-10-24',
+      startedAt: Date.now() - 11 * 60_000,
+      trigger: 'auto-open',
+      status: 'running',
+      attempts: 1,
+    })
+    vi.resetModules()
+    const { claimAutoCheckin } = await import('@/entrypoints/background')
+    await expect(claimAutoCheckin('auto-open')).resolves.toBe(false)
+    expect(storage.set).not.toHaveBeenCalled()
+  })
+
+  it('启动时已过 20 点会补触发当天未签的保底', async () => {
+    setHour(21)
+    const { tabs, alarms } = installBrowser()
+    vi.resetModules()
+    const { startFallbackCheckinScheduler } = await import('@/entrypoints/background')
+    await startFallbackCheckinScheduler()
+    expect(tabs.create).toHaveBeenCalledOnce()
+    expect(alarms.create).toHaveBeenCalledOnce()
   })
 })

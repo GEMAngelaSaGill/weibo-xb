@@ -3,13 +3,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAutoSuperTopicCheckin } from '@/lib/weibo/checkin/use-auto-super-topic-checkin'
 
-const { appendCheckinLog, runSuperTopicCheckinWithRetry, sendMessage } = vi.hoisted(() => ({
+const {
+  appendCheckinLog,
+  localDateString,
+  saveAutoCheckinState,
+  runSuperTopicCheckinWithRetry,
+  sendMessage,
+  onMessage,
+} = vi.hoisted(() => ({
   appendCheckinLog: vi.fn<(entry: unknown) => Promise<void>>(async () => {}),
+  localDateString: vi.fn(() => '2026-10-27'),
+  saveAutoCheckinState: vi.fn<(state: unknown) => Promise<void>>(async () => {}),
   runSuperTopicCheckinWithRetry: vi.fn(),
   sendMessage: vi.fn(),
+  onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
 }))
 
-vi.mock('@/lib/weibo/checkin/checkin-log', () => ({ appendCheckinLog }))
+vi.mock('@/lib/weibo/checkin/checkin-log', () => ({
+  appendCheckinLog,
+  localDateString,
+  saveAutoCheckinState,
+}))
 vi.mock('@/lib/weibo/checkin/checkin-runner', () => ({ runSuperTopicCheckinWithRetry }))
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), {
@@ -30,7 +44,7 @@ describe('useAutoSuperTopicCheckin', () => {
       value: {
         runtime: {
           sendMessage,
-          onMessage: { addListener: vi.fn(), removeListener: vi.fn() },
+          onMessage,
         },
       },
     })
@@ -46,6 +60,30 @@ describe('useAutoSuperTopicCheckin', () => {
     expect(appendCheckinLog).toHaveBeenCalledWith(
       expect.objectContaining({ trigger: 'auto-open', signed: 1 }),
     )
+    expect(saveAutoCheckinState).toHaveBeenCalledWith(
+      expect.objectContaining({ date: '2026-10-27', status: 'done' }),
+    )
+  })
+
+  it('收到保底消息后由当前页面领取，再确认投递成功', async () => {
+    sendMessage.mockResolvedValueOnce({ granted: false }).mockResolvedValueOnce({ granted: true })
+    runSuperTopicCheckinWithRetry.mockResolvedValueOnce(summary)
+    renderHook(() => useAutoSuperTopicCheckin())
+
+    const listener = onMessage.addListener.mock.calls[0]?.[0] as (
+      message: unknown,
+      sender: unknown,
+      respond: (response: { accepted: boolean }) => void,
+    ) => boolean
+    const respond = vi.fn()
+    expect(listener({ type: 'checkin-run' }, {}, respond)).toBe(true)
+
+    await waitFor(() => expect(respond).toHaveBeenCalledWith({ accepted: true }))
+    await waitFor(() => expect(runSuperTopicCheckinWithRetry).toHaveBeenCalledOnce())
+    expect(sendMessage).toHaveBeenNthCalledWith(2, {
+      type: 'checkin-claim',
+      trigger: 'auto-fallback',
+    })
   })
 
   it('被后台拒绝时不跑签到，也不记日志（今天是已经签过了）', async () => {
