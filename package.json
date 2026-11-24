@@ -9,15 +9,15 @@
     "weibo",
     "xb"
   ],
-  "homepage": "https://xb-extension.vercel.app/",
+  "homepage": "https://github.com/GEMAngelaSaGill/weibo-xb",
   "bugs": {
-    "url": "https://github.com/nnecec/xb/issues"
+    "url": "https://github.com/GEMAngelaSaGill/weibo-xb/issues"
   },
   "license": "GPL-3.0",
   "author": "nnecec <nnecec@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nnecec/xb.git"
+    "url": "https://github.com/GEMAngelaSaGill/weibo-xb.git"
   },
   "type": "module",
   "scripts": {
