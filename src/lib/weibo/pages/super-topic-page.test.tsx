@@ -9,7 +9,7 @@ import { AppShell } from '@/lib/weibo/app/app-shell'
 import { loadSuperTopicFlow } from '@/lib/weibo/data/weibo-io'
 import { SuperTopicPage } from '@/lib/weibo/pages/super-topic-page'
 
-const SUPER_TOPIC_ID = '10080822ac697ad6c50539a5cccc69398dafd9'
+const SUPER_TOPIC_ID = '1008080123456789abcdef0123456789'
 
 vi.mock('@/lib/weibo/data/weibo-io', async () => {
   const actual = await vi.importActual<typeof import('@/lib/weibo/data/weibo-io')>(

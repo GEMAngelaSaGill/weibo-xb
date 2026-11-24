@@ -60,7 +60,7 @@ describe('SuperTopicCard', () => {
           title: 'AHyeon',
           intro: '',
           fansText: '32万粉丝',
-          link: 'https://weibo.com/p/10080822ac697ad6c50539a5cccc69398dafd9/super_index',
+          link: 'https://weibo.com/p/1008080123456789abcdef0123456789/super_index',
           pic: '',
           oid: '',
           topicName: 'AHyeon',
@@ -73,7 +73,7 @@ describe('SuperTopicCard', () => {
     renderCard()
 
     const link = await screen.findByRole('link', { name: /AHyeon/ })
-    expect(link).toHaveAttribute('href', '/p/10080822ac697ad6c50539a5cccc69398dafd9/super_index')
+    expect(link).toHaveAttribute('href', '/p/1008080123456789abcdef0123456789/super_index')
     expect(link).not.toHaveAttribute('target', '_blank')
   })
 

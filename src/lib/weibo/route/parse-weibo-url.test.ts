@@ -67,17 +67,17 @@ describe('parseWeiboUrl', () => {
 
   it('parses a super topic home page', () => {
     expect(
-      parseWeiboUrl('https://weibo.com/p/10080822ac697ad6c50539a5cccc69398dafd9/super_index'),
+      parseWeiboUrl('https://weibo.com/p/1008080123456789abcdef0123456789/super_index'),
     ).toEqual({
       kind: 'super-topic',
-      superTopicId: '10080822ac697ad6c50539a5cccc69398dafd9',
+      superTopicId: '1008080123456789abcdef0123456789',
     })
   })
 
   it('parses a super topic URL without the super_index segment', () => {
-    expect(parseWeiboUrl('https://weibo.com/p/10080822ac697ad6c50539a5cccc69398dafd9')).toEqual({
+    expect(parseWeiboUrl('https://weibo.com/p/1008080123456789abcdef0123456789')).toEqual({
       kind: 'super-topic',
-      superTopicId: '10080822ac697ad6c50539a5cccc69398dafd9',
+      superTopicId: '1008080123456789abcdef0123456789',
     })
   })
 
